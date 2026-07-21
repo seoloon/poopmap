@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+}
+
+enum ToiletKind {
+  GRATUIT
+  PAYANT
+  COMMERCE
+}
+
+enum ToiletStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  /// Private login identifier (distinct from the public `pseudo`), stored trimmed + lowercased.
+  username      String   @unique @map("username")
+  /// bcrypt, cost 12.
+  passwordHash  String   @map("password_hash")
+  pseudo        String
+  role          UserRole @default(USER)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sessions     Session[]
+  toilets      Toilet[]
+  reviews      Review[]
+  photos       Photo[]
+  toiletsNamed Toilet[] @relation("ToiletNameSetBy")
+
+  @@map("users")
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+
+  @@map("sessions")
+}
+
+model Toilet {
+  id              Int          @id @default(autoincrement())
+  /// Nullable: OSM-seeded toilets often carry no name tag. Null means "not yet named" —
+  /// see `nameSetById` — as opposed to user-submitted toilets, which always require one.
+  name            String?
+  lat             Float
+  lng             Float
+  address         String?
+  kind            ToiletKind   @default(GRATUIT)
+  price           String?
+  description     String?
+  status          ToiletStatus @default(PENDING)
+  /// External id ("node/123456") when seeded from OSM Overpass — used for idempotent re-seeding.
+  osmId           String?      @unique @map("osm_id")
+  createdById     Int?         @map("created_by")
+  createdBy       User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdByPseudo String       @default("Anonyme") @map("created_by_pseudo")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  /// Denormalized from `reviews` (kept in sync on write) so the map's bulk sync — tens
+  /// of thousands of rows — never has to join the reviews table just to color a pin.
+  reviewCount     Int          @default(0) @map("review_count")
+  /// Denormalized average of (proprete+confort+experience)/3 across all reviews.
+  avgScore        Float        @default(0) @map("avg_score")
+  /// Set when a logged-in user fills in a missing name via "complete this spot" (first
+  /// come, first served — null again after an admin reset, which reopens it for naming).
+  /// Never set for user-submitted toilets, which already require a name up front.
+  nameSetById     Int?         @map("name_set_by")
+  nameSetBy       User?        @relation("ToiletNameSetBy", fields: [nameSetById], references: [id], onDelete: SetNull)
+
+  reviews Review[]
+  photos  Photo[]
+
+  @@index([status])
+  @@map("toilets")
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  toiletId   Int      @map("toilet_id")
+  toilet     Toilet   @relation(fields: [toiletId], references: [id], onDelete: Cascade)
+  userId     Int?     @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pseudo     String
+  proprete   Int
+  confort    Int
+  experience Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([toiletId])
+  @@map("reviews")
+}
+
+model Photo {
+  id          Int      @id @default(autoincrement())
+  toiletId    Int      @map("toilet_id")
+  toilet      Toilet   @relation(fields: [toiletId], references: [id], onDelete: Cascade)
+  /// Data-URL (base64 JPEG, compressed client-side) or /public path for seeded stock photos.
+  url         String
+  caption     String?
+  createdById Int?     @map("created_by")
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([toiletId])
+  @@map("photos")
+}
+
+/// Global version counter — bumped on every mutation visible on the map, used for
+/// cheap client sync (client sends its last known version, server replies 304 if unchanged).
+model Meta {
+  key   String @id
+  value Int    @default(0)
+
+  @@map("meta")
+}
