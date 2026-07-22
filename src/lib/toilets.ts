@@ -34,14 +34,25 @@ const PIN_SELECT = {
 
 type PinRow = Prisma.ToiletGetPayload<{ select: typeof PIN_SELECT }>;
 
+/**
+ * ~11cm at French latitudes — far tighter than GPS/OSM placement accuracy and
+ * imperceptible at any zoom the map allows, but trims the long float tails
+ * (`43.5363875...`) that bloat the bulk sync's JSON *and* compress worse than the
+ * repetitive short decimals rounding produces. Detail lookups (`mapDetail`) keep
+ * full precision — this only applies to the lean pin list fetched at OSM scale.
+ */
+const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
 function mapPin(t: PinRow, meId: number | null): ToiletPin {
   return {
     id: t.id,
-    lat: t.lat,
-    lng: t.lng,
+    lat: round6(t.lat),
+    lng: round6(t.lng),
     kind: KIND_TO_CLIENT[t.kind],
     status: STATUS_TO_CLIENT[t.status],
-    score: t.avgScore,
+    // Only ever displayed rounded to 1-2 decimals client-side — trimming the
+    // repeating-decimal tail from the averaging division here is free.
+    score: Math.round(t.avgScore * 100) / 100,
     reviewCount: t.reviewCount,
     mine: meId !== null && t.createdById === meId && t.status === "PENDING",
   };

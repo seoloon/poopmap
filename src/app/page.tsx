@@ -6,15 +6,20 @@ import { useSearchParams } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import type { FlyTarget } from "@/components/Map";
 import Toasts, { toast } from "@/components/Toasts";
-import DetailPanel from "@/components/DetailPanel";
-import AddToiletModal from "@/components/AddToiletModal";
-import AuthModal from "@/components/AuthModal";
 import type { SessionUser, ToiletPin } from "@/lib/types";
 
 const PoopMap = dynamic(() => import("@/components/Map"), {
   ssr: false,
   loading: () => <Splash />,
 });
+
+// Interaction-gated: nobody sees these on first paint (a marker tap, the "+" button,
+// or "Connexion" is required), so keeping them out of the initial bundle — they and
+// their shared framer-motion import are only fetched once actually needed — shrinks
+// the JS the browser must parse/execute before the map becomes interactive.
+const DetailPanel = dynamic(() => import("@/components/DetailPanel"), { ssr: false });
+const AddToiletModal = dynamic(() => import("@/components/AddToiletModal"), { ssr: false });
+const AuthModal = dynamic(() => import("@/components/AuthModal"), { ssr: false });
 
 const CACHE_KEY = "poopmap_cache_v1";
 
@@ -90,6 +95,20 @@ function Home() {
       .then((d) => setMe(d.user ?? null))
       .catch(() => {});
   }, [sync]);
+
+  // Warm the lazy modal chunks once the map has had a chance to become interactive,
+  // so the first marker tap / "+" / "Connexion" doesn't wait on a network round trip
+  // for code that's overwhelmingly likely to be needed in this session anyway.
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 2000));
+    const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
+    const id = idle(() => {
+      void import("@/components/DetailPanel");
+      void import("@/components/AddToiletModal");
+      void import("@/components/AuthModal");
+    });
+    return () => cancelIdle(id as never);
+  }, []);
 
   useEffect(() => {
     // No point polling a backgrounded tab — pause while hidden, catch up on return.

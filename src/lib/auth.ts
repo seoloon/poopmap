@@ -10,15 +10,20 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const hashPassword = (pw: string) => bcrypt.hash(pw, 12);
 export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);
 
+/**
+ * Runs on nearly every API request (including the map's 20s poll for every logged-in
+ * tab), so this is one `include`-joined query rather than two sequential round trips
+ * to the DB — halves the auth cost of every authenticated call.
+ */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const c = await cookies();
   const token = c.get(COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({ where: { token } });
+  const session = await prisma.session.findUnique({ where: { token }, include: { user: true } });
   if (!session || session.expiresAt < new Date()) return null;
 
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
+  const user = session.user;
   if (!user || user.status !== "ACTIVE") return null;
 
   return {

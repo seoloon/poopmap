@@ -21,7 +21,7 @@ export const GET = withApiErrorHandling(async (req: NextRequest) => {
   }
 
   const toilets = await listToilets(me?.id ?? null);
-  return jsonResponse({ version, toilets }, req, { headers: { "Cache-Control": "no-store" } });
+  return await jsonResponse({ version, toilets }, req, { headers: { "Cache-Control": "no-store" } });
 });
 
 export const POST = withApiErrorHandling(async (req: NextRequest) => {
