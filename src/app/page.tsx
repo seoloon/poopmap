@@ -20,6 +20,9 @@ const PoopMap = dynamic(() => import("@/components/Map"), {
 const DetailPanel = dynamic(() => import("@/components/DetailPanel"), { ssr: false });
 const AddToiletModal = dynamic(() => import("@/components/AddToiletModal"), { ssr: false });
 const AuthModal = dynamic(() => import("@/components/AuthModal"), { ssr: false });
+// Only ever rendered for a logged-in user (returns null otherwise), so it's just as
+// interaction-gated as the modals above from an anonymous visitor's point of view.
+const NotificationBell = dynamic(() => import("@/components/NotificationBell"), { ssr: false });
 
 const CACHE_KEY = "poopmap_cache_v1";
 
@@ -106,6 +109,7 @@ function Home() {
       void import("@/components/DetailPanel");
       void import("@/components/AddToiletModal");
       void import("@/components/AuthModal");
+      void import("@/components/NotificationBell");
     });
     return () => cancelIdle(id as never);
   }, []);
@@ -263,6 +267,7 @@ function Home() {
           </div>
 
           <div className="pointer-events-auto flex items-center gap-2">
+            <NotificationBell me={me} />
             {(me?.role === "admin" || me?.role === "moderator") && (
               <a href="/admin" className="sticker-sm rounded-xl px-3 py-2 text-sm font-extrabold transition hover:-translate-y-0.5 hover:bg-blush">
                 🛠️ Admin

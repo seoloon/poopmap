@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { bumpVersion, KIND_TO_DB } from "./toilets";
+import { notifyModeration } from "./notifications";
 import type { AdminCompletion, AdminReviewRow, ToiletKind } from "./types";
 
 /** Latest reviews, flattened with their toilet — the "Avis" tab's data source. */
@@ -56,18 +57,24 @@ type PartialOpts = { rejectedFields: string[]; approveRest: boolean; edits: Reco
  * `rejectedFields` and applying any moderator edit from `edits` first — the "delete
  * the bad comment, keep the photos/address, then approve" flow.
  */
+const TOILET_EDITABLE = ["name", "address", "description", "price"] as const;
+
 export async function moderateToilet(id: number, opts: PartialOpts): Promise<{ status: "approved" | "rejected" } | null> {
-  const toilet = await prisma.toilet.findUnique({ where: { id }, select: { id: true, status: true } });
+  const toilet = await prisma.toilet.findUnique({
+    where: { id },
+    select: { id: true, status: true, createdById: true, name: true, address: true, description: true, price: true },
+  });
   if (!toilet || toilet.status !== "PENDING") return null;
 
   if (!opts.approveRest) {
     await prisma.toilet.update({ where: { id }, data: { status: "REJECTED" } });
     await bumpVersion();
+    await notifyModeration(toilet.createdById, "toilet", id, "rejected");
     return { status: "rejected" };
   }
 
   const data: Record<string, unknown> = { status: "APPROVED" };
-  for (const field of ["name", "address", "description", "price"] as const) {
+  for (const field of TOILET_EDITABLE) {
     if (opts.rejectedFields.includes(field)) data[field] = null;
     else if (field in opts.edits) data[field] = opts.edits[field].trim() || null;
   }
@@ -77,6 +84,12 @@ export async function moderateToilet(id: number, opts: PartialOpts): Promise<{ s
 
   await prisma.toilet.update({ where: { id }, data });
   await bumpVersion();
+
+  const hadValue = (f: (typeof TOILET_EDITABLE)[number]) => toilet[f] !== null && toilet[f] !== "";
+  const rejected = TOILET_EDITABLE.filter((f) => opts.rejectedFields.includes(f) && hadValue(f));
+  const kept = TOILET_EDITABLE.filter((f) => !opts.rejectedFields.includes(f) && hadValue(f));
+  await notifyModeration(toilet.createdById, "toilet", id, rejected.length === 0 ? "approved" : "partial", { kept, rejected });
+
   return { status: "approved" };
 }
 
@@ -99,6 +112,7 @@ export async function moderateCompletion(
 
   if (!opts.approveRest) {
     await prisma.completion.update({ where: { id }, data: { status: "REJECTED", reviewedAt: new Date(), reviewedById: moderatorId } });
+    await notifyModeration(completion.userId, "completion", completion.toiletId, "rejected");
     return { status: "rejected" };
   }
 
@@ -133,6 +147,18 @@ export async function moderateCompletion(
 
   await prisma.completion.update({ where: { id }, data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: moderatorId } });
   await bumpVersion();
+
+  const submitted = {
+    name: completion.name !== null,
+    address: completion.address !== null,
+    comment: completion.comment !== null,
+    photos: completion.photos.length > 0,
+  };
+  const fields = Object.keys(submitted) as (keyof typeof submitted)[];
+  const rejected = fields.filter((f) => submitted[f] && opts.rejectedFields.includes(f));
+  const kept = fields.filter((f) => submitted[f] && !opts.rejectedFields.includes(f));
+  await notifyModeration(completion.userId, "completion", completion.toiletId, rejected.length === 0 ? "approved" : "partial", { kept, rejected });
+
   return { status: "approved", applied };
 }
 
@@ -170,10 +196,18 @@ async function setReviewStatus(reviewId: number, status: "PUBLISHED" | "REJECTED
 
 /** Moderates a review: `approveRest: false` rejects it, `true` (re-)publishes it. */
 export async function moderateReview(id: number, opts: PartialOpts): Promise<{ status: "published" | "rejected" } | null> {
+  const review = await prisma.review.findUnique({ where: { id }, select: { userId: true, toiletId: true, comment: true } });
+  if (!review) return null;
+
   const targetStatus = opts.approveRest ? "PUBLISHED" : "REJECTED";
   const commentOverride = opts.rejectedFields.includes("comment") ? null : opts.edits.comment !== undefined ? opts.edits.comment.trim().slice(0, 600) || null : undefined;
 
   const ok = await setReviewStatus(id, targetStatus, commentOverride);
   if (!ok) return null;
+
+  const commentStripped = review.comment !== null && commentOverride === null;
+  const outcome = !opts.approveRest ? "rejected" : commentStripped ? "partial" : "approved";
+  await notifyModeration(review.userId, "review", review.toiletId, outcome, commentStripped ? { rejected: ["comment"] } : undefined);
+
   return { status: targetStatus === "PUBLISHED" ? "published" : "rejected" };
 }

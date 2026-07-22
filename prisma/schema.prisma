@@ -41,6 +41,18 @@ enum CompletionStatus {
   REJECTED
 }
 
+enum NotificationType {
+  TOILET
+  REVIEW
+  COMPLETION
+}
+
+enum NotificationStatus {
+  APPROVED
+  REJECTED
+  PARTIAL
+}
+
 model User {
   id            Int      @id @default(autoincrement())
   /// Private login identifier (distinct from the public `pseudo`), stored trimmed + lowercased.
@@ -56,9 +68,10 @@ model User {
   toilets             Toilet[]
   reviews             Review[]
   photos              Photo[]
-  toiletsNamed        Toilet[]     @relation("ToiletNameSetBy")
+  toiletsNamed        Toilet[]       @relation("ToiletNameSetBy")
   completions         Completion[]
-  completionsReviewed Completion[] @relation("CompletionReviewedBy")
+  completionsReviewed Completion[]   @relation("CompletionReviewedBy")
+  notifications       Notification[]
 
   @@map("users")
 }
@@ -179,6 +192,32 @@ model Photo {
 
   @@index([toiletId])
   @@map("photos")
+}
+
+/// A moderation outcome delivered to the user whose submission it was — created
+/// server-side by the moderation endpoints, never by the client. `referenceId` is
+/// always the toilet id (even for REVIEW/COMPLETION), since "voir" always means
+/// "show me that spot on the map" — there's no standalone review/completion page.
+/// Unread count is computed on query (`count(where: {read: false})`) rather than
+/// denormalized on `User`: this table stays small per user, so an extra synced
+/// counter would add write-coordination risk for no real read-speed benefit.
+model Notification {
+  id          Int                 @id @default(autoincrement())
+  userId      Int                 @map("user_id")
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  referenceId Int                 @map("reference_id")
+  status      NotificationStatus
+  /// Server-generated, human-readable French message — the client never composes this.
+  message     String
+  /// { keptFields?: string[], rejectedFields?: string[], comment?: string } — populated for PARTIAL.
+  details     Json?
+  read        Boolean             @default(false)
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
 
 /// Global version counter — bumped on every mutation visible on the map, used for

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword, requireRole } from "@/lib/auth";
 import { bumpVersion, listModeratable, listPendingToilets } from "@/lib/toilets";
 import { listCompletionsForAdmin, listReviewsForAdmin } from "@/lib/moderation";
+import { notifyModeration } from "@/lib/notifications";
 import { withApiErrorHandling } from "@/lib/api-error";
 import type { Role } from "@/lib/types";
 
@@ -77,13 +78,15 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
 
   switch (action) {
     case "approve": {
-      await prisma.toilet.update({ where: { id: targetId }, data: { status: "APPROVED" } });
+      const t = await prisma.toilet.update({ where: { id: targetId }, data: { status: "APPROVED" }, select: { createdById: true } });
       await bumpVersion();
+      await notifyModeration(t.createdById, "toilet", targetId, "approved");
       return NextResponse.json({ ok: true });
     }
     case "reject": {
-      await prisma.toilet.update({ where: { id: targetId }, data: { status: "REJECTED" } });
+      const t = await prisma.toilet.update({ where: { id: targetId }, data: { status: "REJECTED" }, select: { createdById: true } });
       await bumpVersion();
+      await notifyModeration(t.createdById, "toilet", targetId, "rejected");
       return NextResponse.json({ ok: true });
     }
     case "ban": {

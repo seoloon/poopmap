@@ -122,3 +122,19 @@ export type AdminCompletion = {
   createdAt: string;
   photos: { id: number; url: string }[];
 };
+
+export type NotificationKind = "toilet" | "review" | "completion";
+export type NotificationOutcome = "approved" | "rejected" | "partial";
+
+/** A moderation-outcome notification — message/details are server-generated. */
+export type AppNotification = {
+  id: number;
+  type: NotificationKind;
+  /** A toilet id — "voir" always means "show this spot on the map". */
+  referenceId: number;
+  status: NotificationOutcome;
+  message: string;
+  details: { keptFields?: string[]; rejectedFields?: string[]; comment?: string } | null;
+  read: boolean;
+  createdAt: string;
+};
