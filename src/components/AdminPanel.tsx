@@ -2,7 +2,19 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import type { AdminCompletion, AdminModeratableToilet, AdminReviewRow, AdminStats, AdminUserRow, Role, SessionUser, ToiletDetail } from "@/lib/types";
+import type {
+  AdminCompletion,
+  AdminModeratableToilet,
+  AdminReport,
+  AdminReportGroup,
+  AdminReviewRow,
+  AdminStats,
+  AdminUserRow,
+  Role,
+  SessionUser,
+  ToiletDetail,
+} from "@/lib/types";
+import { REPORT_CATEGORIES } from "@/lib/types";
 import { toast } from "./Toasts";
 
 type Data = {
@@ -10,11 +22,17 @@ type Data = {
   moderation: AdminModeratableToilet[];
   reviews: AdminReviewRow[];
   completions: AdminCompletion[];
+  reports: AdminReportGroup[];
   users: AdminUserRow[];
   stats: AdminStats;
 };
 
-type Tab = "queue" | "avis" | "completions" | "users";
+type Tab = "queue" | "avis" | "completions" | "reports" | "users";
+
+const CATEGORY_LABEL: Record<AdminReport["category"], string> = Object.fromEntries(REPORT_CATEGORIES.map((c) => [c.value, c.label])) as Record<
+  AdminReport["category"],
+  string
+>;
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -26,6 +44,8 @@ const btnDanger =
   "flex-1 rounded-xl border-2 border-ink bg-red-600 px-3 py-2 text-xs font-extrabold text-white shadow-[3px_3px_0_#1a1a1a] transition hover:-translate-y-0.5";
 const btnGhost = "sticker-sm rounded-lg px-2.5 py-1.5 text-xs font-extrabold transition hover:-translate-y-0.5 hover:bg-blush";
 const fieldCls = "w-full rounded-lg border-2 border-ink/25 bg-white px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-teal";
+/** Status pill — same shape/position (top-right of the card) everywhere it's used. */
+const pillCls = (colorCls: string) => `shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${colorCls}`;
 
 export default function AdminPanel({ me }: { me: SessionUser }) {
   const [data, setData] = useState<Data | null>(null);
@@ -80,6 +100,39 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
     await load();
   };
 
+  /** Standalone soft-delete — a distinct REST endpoint, not one of the POST /api/admin actions. */
+  const del = async (toiletId: number, msg?: string) => {
+    const res = await fetch(`/api/admin/toilets/${toiletId}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast(d.error ?? "Erreur", "err");
+      return;
+    }
+    toast(msg ?? "Toilette supprimée 🗑️");
+    await load();
+  };
+
+  /** Resolves every pending report on one toilet at once (they stack). */
+  const resolveReport = async (
+    toiletId: number,
+    decision: "approve" | "reject",
+    resolution?: "delete" | "hide" | "keep",
+    modComment?: string
+  ) => {
+    const res = await fetch("/api/admin/reports", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toiletId, decision, resolution, modComment }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast(d.error ?? "Erreur", "err");
+      return;
+    }
+    toast(decision === "reject" ? "Signalement rejeté 🚫" : "Signalement traité ✅");
+    await load();
+  };
+
   return (
     <div className="min-h-dvh bg-cream pb-16">
       <header className="sticky top-0 z-10 border-b-2 border-ink bg-cream/95 px-4 py-3 backdrop-blur">
@@ -103,11 +156,12 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
 
       <main className="mx-auto max-w-4xl px-4 pt-5">
         {data && (
-          <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+          <div className="mb-5 grid grid-cols-3 gap-2.5 sm:grid-cols-6">
             {[
               { label: "En attente", v: data.stats.pending, e: "⏳" },
               { label: "Approuvés", v: data.stats.approved, e: "✅" },
               { label: "Rejetés", v: data.stats.rejected, e: "🚫" },
+              { label: "Signalements", v: data.stats.reports, e: "🚩" },
               { label: "Comptes", v: data.stats.users, e: "👥" },
               { label: "Avis", v: data.stats.reviews, e: "💬" },
             ].map((s) => (
@@ -121,12 +175,13 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
           </div>
         )}
 
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
           {(
             [
               { v: "queue", label: `🕵️ Requêtes${data && data.stats.pending > 0 ? ` (${data.stats.pending})` : ""}` },
               { v: "avis", label: `💬 Avis${data ? ` (${data.reviews.length})` : ""}` },
               { v: "completions", label: `🧩 Complétions${data && data.stats.completions > 0 ? ` (${data.stats.completions})` : ""}` },
+              { v: "reports", label: `🚩 Signalements${data && data.stats.reports > 0 ? ` (${data.stats.reports})` : ""}` },
               { v: "users", label: "👥 Comptes" },
             ] as const
           ).map((t) => (
@@ -149,49 +204,51 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
             ))}
           </div>
         ) : tab === "queue" ? (
-          <QueueTab pending={data.pending} act={act} partial={partial} />
+          <QueueTab pending={data.pending} act={act} partial={partial} del={del} />
         ) : tab === "avis" ? (
-          <AvisTab reviews={data.reviews} moderation={data.moderation} partial={partial} act={act} />
+          <AvisTab reviews={data.reviews} moderation={data.moderation} partial={partial} act={act} del={del} />
         ) : tab === "completions" ? (
           <CompletionsTab completions={data.completions} partial={partial} />
+        ) : tab === "reports" ? (
+          <ReportsTab groups={data.reports} onResolve={resolveReport} />
         ) : (
           <ul className="space-y-3">
             {data.users.map((u) => (
               <li key={u.id} className="sticker p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="grid h-9 w-9 place-items-center rounded-full border-2 border-ink bg-blush font-display font-extrabold">
-                    {u.pseudo[0]?.toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-display text-base font-extrabold leading-tight">
-                      {u.pseudo}
-                      {u.id === me.id && <span className="ml-1.5 text-[10px] font-bold text-ink/50">(toi)</span>}
-                    </p>
-                    <p className="truncate font-mono text-[11px] font-bold text-ink/60">{u.username}</p>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-ink bg-blush font-display font-extrabold">
+                      {u.pseudo[0]?.toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-display text-base font-extrabold leading-tight">
+                        {u.pseudo}
+                        {u.id === me.id && <span className="ml-1.5 text-[10px] font-bold text-ink/50">(toi)</span>}
+                      </p>
+                      <p className="truncate font-mono text-[11px] font-bold text-ink/60">{u.username}</p>
+                      <p className="text-[10px] font-bold text-ink/50">
+                        {u.reviewCount} avis · inscrit le {fmtDate(u.createdAt)}
+                      </p>
+                    </div>
                   </div>
-                  {me.role === "admin" ? (
-                    <select
-                      value={u.role}
-                      onChange={(e) => void act("setrole", u.id, { role: e.target.value }, "Rôle mis à jour 👑")}
-                      className="ml-auto rounded-full border-2 border-ink bg-white px-2 py-0.5 text-[10px] font-extrabold"
-                    >
-                      <option value="user">utilisateur</option>
-                      <option value="moderator">🛡️ modérateur</option>
-                      <option value="admin">👑 admin</option>
-                    </select>
-                  ) : (
-                    <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-extrabold ${roleBadgeCls(u.role)}`}>{roleLabel(u.role)}</span>
-                  )}
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                      u.status === "active" ? "bg-sage/40 text-teal-dark" : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {u.status === "active" ? "actif" : "suspendu"}
-                  </span>
-                  <span className="text-[10px] font-bold text-ink/50">
-                    {u.reviewCount} avis · inscrit le {fmtDate(u.createdAt)}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {me.role === "admin" ? (
+                      <select
+                        value={u.role}
+                        onChange={(e) => void act("setrole", u.id, { role: e.target.value }, "Rôle mis à jour 👑")}
+                        className="rounded-full border-2 border-ink bg-white px-2 py-1 text-[10px] font-extrabold"
+                      >
+                        <option value="user">utilisateur</option>
+                        <option value="moderator">🛡️ modérateur</option>
+                        <option value="admin">👑 admin</option>
+                      </select>
+                    ) : (
+                      <span className={pillCls(roleBadgeCls(u.role))}>{roleLabel(u.role)}</span>
+                    )}
+                    <span className={pillCls(u.status === "active" ? "bg-sage/40 text-teal-dark" : "bg-red-100 text-red-700")}>
+                      {u.status === "active" ? "actif" : "suspendu"}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {me.role !== "admin" && (
@@ -280,8 +337,64 @@ type PartialFn = (
   msg?: string
 ) => Promise<void>;
 type ActFn = (action: string, id: number, extra?: Record<string, string>, msg?: string) => Promise<void>;
+type DelFn = (toiletId: number, msg?: string) => Promise<void>;
 
-function QueueTab({ pending, act, partial }: { pending: ToiletDetail[]; act: ActFn; partial: PartialFn }) {
+/** Small centered confirm dialog for destructive actions — D.A.-matched, not the browser's native confirm(). */
+function ConfirmModal({
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-ink/50 p-4" onClick={onCancel}>
+      <div className="sticker w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        <p className="font-display text-lg font-extrabold">{title}</p>
+        <p className="mt-1.5 text-sm font-semibold text-ink/70">{body}</p>
+        <div className="mt-4 flex gap-2">
+          <button onClick={onCancel} className={btnGhost}>
+            Annuler
+          </button>
+          <button onClick={onConfirm} className={btnDanger}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteToiletButton({ toiletId, toiletName, del }: { toiletId: number; toiletName: string; del: DelFn }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <>
+      <button onClick={() => setConfirming(true)} className={`${btnGhost} text-red-700`}>
+        🗑️ Supprimer
+      </button>
+      {confirming && (
+        <ConfirmModal
+          title="🗑️ Supprimer cette toilette ?"
+          body={`« ${toiletName} » sera retirée de la carte pour tout le monde (suppression réversible en base, pour audit).`}
+          confirmLabel="Supprimer"
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            void del(toiletId, "Toilette supprimée 🗑️");
+            setConfirming(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function QueueTab({ pending, act, partial, del }: { pending: ToiletDetail[]; act: ActFn; partial: PartialFn; del: DelFn }) {
   if (pending.length === 0) {
     return (
       <div className="sticker px-6 py-10 text-center">
@@ -294,13 +407,13 @@ function QueueTab({ pending, act, partial }: { pending: ToiletDetail[]; act: Act
   return (
     <ul className="space-y-3">
       {pending.map((t) => (
-        <PendingToiletCard key={t.id} t={t} act={act} partial={partial} />
+        <PendingToiletCard key={t.id} t={t} act={act} partial={partial} del={del} />
       ))}
     </ul>
   );
 }
 
-function PendingToiletCard({ t, act, partial }: { t: ToiletDetail; act: ActFn; partial: PartialFn }) {
+function PendingToiletCard({ t, act, partial, del }: { t: ToiletDetail; act: ActFn; partial: PartialFn; del: DelFn }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(t.name ?? "");
   const [address, setAddress] = useState(t.address ?? "");
@@ -331,14 +444,7 @@ function PendingToiletCard({ t, act, partial }: { t: ToiletDetail; act: ActFn; p
             {t.lat.toFixed(5)}, {t.lng.toFixed(5)}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button onClick={() => setEditing((e) => !e)} className={btnGhost}>
-            ✏️ {editing ? "Fermer" : "Éditer"}
-          </button>
-          <a href={`/?focus=${t.id}`} className={btnGhost}>
-            🗺️ Carte
-          </a>
-        </div>
+        <span className={pillCls("bg-blue-100 text-blue-800")}>⏳ en attente</span>
       </div>
 
       {t.photos.length > 0 && (
@@ -359,7 +465,7 @@ function PendingToiletCard({ t, act, partial }: { t: ToiletDetail; act: ActFn; p
         </div>
       )}
 
-      {editing ? (
+      {editing && (
         <div className="mt-3 space-y-2 rounded-xl border-2 border-dashed border-teal bg-teal/5 p-3">
           <p className="text-[10px] font-extrabold uppercase tracking-wide text-teal-dark">
             Vide un champ pour l&apos;exclure de l&apos;approbation
@@ -374,25 +480,38 @@ function PendingToiletCard({ t, act, partial }: { t: ToiletDetail; act: ActFn; p
             rows={2}
             className={`${fieldCls} resize-none`}
           />
-          <div className="flex gap-2">
+        </div>
+      )}
+
+      {/* Action row — same order/position on every card in this panel: Éditer, Approuver, Rejeter, Carte. */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={() => setEditing((e) => !e)} className={btnGhost}>
+          ✏️ {editing ? "Fermer" : "Éditer"}
+        </button>
+        {editing ? (
+          <>
             <button onClick={approveEdited} className={btnPrimary}>
               ✅ Approuver ces champs
             </button>
             <button onClick={() => void act("reject", t.id, undefined, "Spot recalé 🚫")} className={btnDanger}>
               🚫 Tout rejeter
             </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-3 flex gap-2">
-          <button onClick={() => void act("approve", t.id, undefined, "Petit coin approuvé — visible pour tous ✅")} className={btnPrimary}>
-            ✅ Approuver
-          </button>
-          <button onClick={() => void act("reject", t.id, undefined, "Spot recalé 🚫")} className={btnDanger}>
-            🚫 Rejeter
-          </button>
-        </div>
-      )}
+          </>
+        ) : (
+          <>
+            <button onClick={() => void act("approve", t.id, undefined, "Petit coin approuvé — visible pour tous ✅")} className={btnPrimary}>
+              ✅ Approuver
+            </button>
+            <button onClick={() => void act("reject", t.id, undefined, "Spot recalé 🚫")} className={btnDanger}>
+              🚫 Rejeter
+            </button>
+          </>
+        )}
+        <a href={`/?focus=${t.id}`} className={btnGhost}>
+          🗺️ Carte
+        </a>
+        <DeleteToiletButton toiletId={t.id} toiletName={t.name ?? "Toilette sans nom"} del={del} />
+      </div>
     </li>
   );
 }
@@ -402,11 +521,13 @@ function AvisTab({
   moderation,
   partial,
   act,
+  del,
 }: {
   reviews: AdminReviewRow[];
   moderation: AdminModeratableToilet[];
   partial: PartialFn;
   act: ActFn;
+  del: DelFn;
 }) {
   return (
     <div className="space-y-5">
@@ -429,32 +550,14 @@ function AvisTab({
           <ul className="space-y-2.5">
             {moderation.map((t) => (
               <li key={t.id} className="sticker p-3.5">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="font-display text-base font-extrabold leading-tight">
-                      {t.name ?? <span className="italic text-ink/40">Toilette sans nom</span>}
-                    </p>
-                    <p className="text-xs font-bold text-ink/60">
-                      {t.kind}
-                      {t.address && ` · 📍 ${t.address}`}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {t.nameSetById !== null && (
-                      <button
-                        onClick={() => {
-                          if (confirm("Réinitialiser le nom de ce spot ? Il redeviendra proposable par quelqu'un d'autre."))
-                            void act("resetname", t.id, undefined, "Nom réinitialisé 🔄");
-                        }}
-                        className={btnGhost}
-                      >
-                        🔄 Nom
-                      </button>
-                    )}
-                    <a href={`/?focus=${t.id}`} className={btnGhost}>
-                      🗺️ Carte
-                    </a>
-                  </div>
+                <div>
+                  <p className="font-display text-base font-extrabold leading-tight">
+                    {t.name ?? <span className="italic text-ink/40">Toilette sans nom</span>}
+                  </p>
+                  <p className="text-xs font-bold text-ink/60">
+                    {t.kind}
+                    {t.address && ` · 📍 ${t.address}`}
+                  </p>
                 </div>
                 {t.photos.length > 0 && (
                   <div className="no-scrollbar mt-2.5 flex gap-2 overflow-x-auto">
@@ -473,6 +576,23 @@ function AvisTab({
                     ))}
                   </div>
                 )}
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {t.nameSetById !== null && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Réinitialiser le nom de ce spot ? Il redeviendra proposable par quelqu'un d'autre."))
+                          void act("resetname", t.id, undefined, "Nom réinitialisé 🔄");
+                      }}
+                      className={btnGhost}
+                    >
+                      🔄 Nom
+                    </button>
+                  )}
+                  <a href={`/?focus=${t.id}`} className={btnGhost}>
+                    🗺️ Carte
+                  </a>
+                  <DeleteToiletButton toiletId={t.id} toiletName={t.name ?? "Toilette sans nom"} del={del} />
+                </div>
               </li>
             ))}
           </ul>
@@ -494,18 +614,11 @@ function ReviewCard({ r, partial }: { r: AdminReviewRow; partial: PartialFn }) {
             {r.pseudo} <span className="font-normal text-ink/50">· {fmtDate(r.createdAt)}</span>
           </p>
           <p className="text-[11px] font-bold text-ink/60">
-            🧼{r.proprete} 🛋️{r.confort} ✨{r.experience} · sur{" "}
-            <a href={`/?focus=${r.toiletId}`} className="underline decoration-dotted">
-              {r.toiletName ?? "toilette sans nom"}
-            </a>
+            🧼{r.proprete} 🛋️{r.confort} ✨{r.experience} · sur {r.toiletName ?? "toilette sans nom"}
           </p>
           {!editing && r.comment && <p className="mt-1 text-sm font-semibold text-ink/85">{r.comment}</p>}
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-            r.status === "published" ? "bg-sage/40 text-teal-dark" : "bg-red-100 text-red-700"
-          }`}
-        >
+        <span className={pillCls(r.status === "published" ? "bg-sage/40 text-teal-dark" : "bg-red-100 text-red-700")}>
           {r.status === "published" ? "publié" : "rejeté"}
         </span>
       </div>
@@ -520,24 +633,22 @@ function ReviewCard({ r, partial }: { r: AdminReviewRow; partial: PartialFn }) {
         />
       )}
 
-      <div className="mt-2.5 flex gap-2">
+      {/* Action row — same order/position on every card in this panel: Éditer, Approuver, Rejeter, Carte. */}
+      <div className="mt-2.5 flex flex-wrap gap-2">
         {r.comment !== null && (
           <button onClick={() => setEditing((e) => !e)} className={btnGhost}>
             ✏️ {editing ? "Fermer" : "Éditer le commentaire"}
           </button>
         )}
-        <button
-          onClick={() => void partial("review", r.id, { approveRest: true, edits: { comment } }, "Avis publié ✅")}
-          className="rounded-lg border-2 border-ink bg-teal px-3 py-1.5 text-xs font-extrabold text-white transition hover:-translate-y-0.5"
-        >
+        <button onClick={() => void partial("review", r.id, { approveRest: true, edits: { comment } }, "Avis publié ✅")} className={btnPrimary}>
           ✅ Publier
         </button>
-        <button
-          onClick={() => void partial("review", r.id, { approveRest: false }, "Avis rejeté 🚫")}
-          className="rounded-lg border-2 border-ink bg-white px-3 py-1.5 text-xs font-extrabold text-red-700 transition hover:bg-red-50"
-        >
+        <button onClick={() => void partial("review", r.id, { approveRest: false }, "Avis rejeté 🚫")} className={btnDanger}>
           🚫 Rejeter
         </button>
+        <a href={`/?focus=${r.toiletId}`} className={btnGhost}>
+          🗺️ Carte
+        </a>
       </div>
     </li>
   );
@@ -585,21 +696,13 @@ function CompletionCard({ c, partial }: { c: AdminCompletion; partial: PartialFn
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold text-ink/60">
-            {c.userPseudo} propose de compléter{" "}
-            <a href={`/?focus=${c.toiletId}`} className="underline decoration-dotted">
-              {c.toiletName ?? "toilette sans nom"}
-            </a>{" "}
-            · {fmtDate(c.createdAt)}
+            {c.userPseudo} propose de compléter {c.toiletName ?? "toilette sans nom"} · {fmtDate(c.createdAt)}
           </p>
         </div>
         <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-            c.status === "pending"
-              ? "bg-blue-100 text-blue-800"
-              : c.status === "approved"
-                ? "bg-sage/40 text-teal-dark"
-                : "bg-red-100 text-red-700"
-          }`}
+          className={pillCls(
+            c.status === "pending" ? "bg-blue-100 text-blue-800" : c.status === "approved" ? "bg-sage/40 text-teal-dark" : "bg-red-100 text-red-700"
+          )}
         >
           {c.status === "pending" ? "en attente" : c.status === "approved" ? "approuvée" : "rejetée"}
         </span>
@@ -646,15 +749,154 @@ function CompletionCard({ c, partial }: { c: AdminCompletion; partial: PartialFn
               ))}
             </div>
           )}
-          <div className="flex gap-2 pt-1">
+        </div>
+      )}
+
+      {/* Action row — same order/position on every card in this panel: Approuver, Rejeter, Carte. */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {c.status === "pending" && (
+          <>
             <button onClick={approve} className={btnPrimary}>
               ✅ Approuver
             </button>
             <button onClick={() => void partial("completion", c.id, { approveRest: false }, "Complétion rejetée 🚫")} className={btnDanger}>
               🚫 Tout rejeter
             </button>
-          </div>
+          </>
+        )}
+        <a href={`/?focus=${c.toiletId}`} className={btnGhost}>
+          🗺️ Carte
+        </a>
+      </div>
+    </li>
+  );
+}
+
+type ResolveFn = (toiletId: number, decision: "approve" | "reject", resolution?: "delete" | "hide" | "keep", modComment?: string) => Promise<void>;
+
+const RESOLUTIONS = [
+  { v: "delete", label: "🗑️ Supprimer la toilette" },
+  { v: "hide", label: "🙈 Masquer temporairement" },
+  { v: "keep", label: "✅ Conserver (aucune action destructive)" },
+] as const;
+
+/** The "Approuver" action chooser — pick what happens to the toilet, plus an optional mod comment. */
+function ResolveReportModal({
+  toiletName,
+  onResolve,
+  onCancel,
+}: {
+  toiletName: string;
+  onResolve: (resolution: "delete" | "hide" | "keep", modComment?: string) => void;
+  onCancel: () => void;
+}) {
+  const [resolution, setResolution] = useState<"delete" | "hide" | "keep">("keep");
+  const [modComment, setModComment] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-ink/50 p-4" onClick={onCancel}>
+      <div className="sticker w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        <p className="font-display text-lg font-extrabold">✅ Approuver le signalement</p>
+        <p className="mt-0.5 text-xs font-bold text-ink/60">{toiletName}</p>
+        <div className="mt-3 space-y-2">
+          {RESOLUTIONS.map((o) => (
+            <button
+              key={o.v}
+              onClick={() => setResolution(o.v)}
+              className={`w-full rounded-xl border-2 border-ink px-3 py-2.5 text-left text-sm font-extrabold transition ${
+                resolution === o.v ? "bg-signage shadow-[3px_3px_0_#1a1a1a]" : "bg-white hover:bg-blush"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
+        <textarea
+          value={modComment}
+          onChange={(e) => setModComment(e.target.value)}
+          placeholder="Commentaire de modération (optionnel)"
+          rows={2}
+          className={`${fieldCls} mt-3 resize-none`}
+        />
+        <div className="mt-3 flex gap-2">
+          <button onClick={onCancel} className={btnGhost}>
+            Annuler
+          </button>
+          <button onClick={() => onResolve(resolution, modComment.trim() || undefined)} className={btnPrimary}>
+            Valider
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportsTab({ groups, onResolve }: { groups: AdminReportGroup[]; onResolve: ResolveFn }) {
+  if (groups.length === 0) {
+    return (
+      <div className="sticker px-6 py-10 text-center">
+        <p className="text-4xl">🕊️</p>
+        <p className="mt-2 font-display text-xl font-extrabold">Aucun signalement</p>
+        <p className="text-sm font-bold text-ink/60">Personne n&apos;a rien à signaler pour l&apos;instant.</p>
+      </div>
+    );
+  }
+  return (
+    <ul className="space-y-3">
+      {groups.map((g) => (
+        <ReportGroupCard key={g.toiletId} group={g} onResolve={onResolve} />
+      ))}
+    </ul>
+  );
+}
+
+function ReportGroupCard({ group, onResolve }: { group: AdminReportGroup; onResolve: ResolveFn }) {
+  const [showChooser, setShowChooser] = useState(false);
+  const toiletName = group.toiletName ?? "Toilette sans nom";
+
+  return (
+    <li className="sticker p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="font-display text-lg font-extrabold leading-tight">{toiletName}</p>
+        <span className={pillCls("bg-red-100 text-red-700")}>
+          🚩 {group.reports.length} signalement{group.reports.length > 1 ? "s" : ""}
+        </span>
+      </div>
+
+      <ul className="mt-2.5 space-y-2">
+        {group.reports.map((r) => (
+          <li key={r.id} className="rounded-xl border-2 border-ink/15 bg-white p-2.5">
+            <p className="text-xs font-extrabold">{CATEGORY_LABEL[r.category]}</p>
+            {r.description && <p className="mt-0.5 text-sm font-semibold text-ink/80">{r.description}</p>}
+            <p className="mt-1 text-[10px] font-bold text-ink/50">
+              par {r.userPseudo} · {fmtDate(r.createdAt)}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      {/* Action row — same order/position on every card in this panel: Approuver, Rejeter, Carte. */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={() => setShowChooser(true)} className={btnPrimary}>
+          ✅ Approuver
+        </button>
+        <button onClick={() => void onResolve(group.toiletId, "reject")} className={btnDanger}>
+          🚫 Rejeter
+        </button>
+        <a href={`/?focus=${group.toiletId}`} className={btnGhost}>
+          🗺️ Carte
+        </a>
+      </div>
+
+      {showChooser && (
+        <ResolveReportModal
+          toiletName={toiletName}
+          onCancel={() => setShowChooser(false)}
+          onResolve={(resolution, modComment) => {
+            void onResolve(group.toiletId, "approve", resolution, modComment);
+            setShowChooser(false);
+          }}
+        />
       )}
     </li>
   );

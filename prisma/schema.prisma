@@ -24,10 +24,41 @@ enum ToiletKind {
   COMMERCE
 }
 
+/// Single source of truth for a toilet's lifecycle — deliberately not split into a
+/// separate moderation-status + lifecycle-status pair, which would let a toilet be
+/// e.g. REJECTED and DELETED at once. HIDDEN/DELETED only ever apply to toilets that
+/// were APPROVED first; the public sync (`GET /api/toilets`) already allow-lists
+/// `APPROVED` (+ the caller's own `PENDING`), so both are excluded automatically.
 enum ToiletStatus {
   PENDING
   APPROVED
   REJECTED
+  /// Temporarily taken off the map (report resolution: "masquer temporairement") —
+  /// reversible, unlike DELETED.
+  HIDDEN
+  /// Soft-deleted — never hard-deleted, kept for audit. Excluded from every sync.
+  DELETED
+}
+
+enum ReportCategory {
+  CLOSED
+  NOT_EXISTING
+  WRONG_INFO
+  INAPPROPRIATE
+  UNSAFE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ModerationAction {
+  NONE
+  TOILET_DELETED
+  TOILET_HIDDEN
 }
 
 enum ReviewStatus {
@@ -45,6 +76,7 @@ enum NotificationType {
   TOILET
   REVIEW
   COMPLETION
+  REPORT
 }
 
 enum NotificationStatus {
@@ -69,9 +101,12 @@ model User {
   reviews             Review[]
   photos              Photo[]
   toiletsNamed        Toilet[]       @relation("ToiletNameSetBy")
+  toiletsDeleted      Toilet[]       @relation("ToiletDeletedBy")
   completions         Completion[]
   completionsReviewed Completion[]   @relation("CompletionReviewedBy")
   notifications       Notification[]
+  reports             Report[]       @relation("ReportedBy")
+  reportsResolved     Report[]       @relation("ReportResolvedBy")
 
   @@map("users")
 }
@@ -114,10 +149,16 @@ model Toilet {
   /// Never set for user-submitted toilets, which already require a name up front.
   nameSetById     Int?         @map("name_set_by")
   nameSetBy       User?        @relation("ToiletNameSetBy", fields: [nameSetById], references: [id], onDelete: SetNull)
+  /// Set when status transitions to HIDDEN or DELETED (via a resolved report or a
+  /// direct moderator action) — who/when, for audit. Null otherwise.
+  deletedAt       DateTime?    @map("deleted_at")
+  deletedById     Int?         @map("deleted_by")
+  deletedBy       User?        @relation("ToiletDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
 
   reviews     Review[]
   photos      Photo[]
   completions Completion[]
+  reports     Report[]
 
   @@index([status])
   @@map("toilets")
@@ -177,6 +218,31 @@ model CompletionPhoto {
   url          String
 
   @@map("completion_photos")
+}
+
+/// A registered user's report against an existing (approved) toilet. Multiple pending
+/// reports on the same toilet "stack" — they're resolved together as a group (see
+/// `resolveReports` in lib/reports.ts), not one at a time, since it'd be nonsensical
+/// to delete a toilet for report A while report B on the same toilet sits pending.
+model Report {
+  id           Int               @id @default(autoincrement())
+  toiletId     Int               @map("toilet_id")
+  toilet       Toilet            @relation(fields: [toiletId], references: [id], onDelete: Cascade)
+  userId       Int               @map("user_id")
+  user         User              @relation("ReportedBy", fields: [userId], references: [id], onDelete: Cascade)
+  category     ReportCategory
+  description  String?
+  status       ReportStatus      @default(PENDING)
+  action       ModerationAction  @default(NONE)
+  modComment   String?           @map("mod_comment")
+  resolvedById Int?              @map("resolved_by")
+  resolvedBy   User?             @relation("ReportResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?         @map("resolved_at")
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  @@index([toiletId])
+  @@index([status])
+  @@map("reports")
 }
 
 model Photo {

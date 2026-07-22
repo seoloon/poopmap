@@ -2,8 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import type { AppNotification, NotificationKind, NotificationOutcome } from "./types";
 
-const TYPE_TO_DB = { toilet: "TOILET", review: "REVIEW", completion: "COMPLETION" } as const;
-const TYPE_TO_CLIENT = { TOILET: "toilet", REVIEW: "review", COMPLETION: "completion" } as const;
+const TYPE_TO_DB = { toilet: "TOILET", review: "REVIEW", completion: "COMPLETION", report: "REPORT" } as const;
+const TYPE_TO_CLIENT = { TOILET: "toilet", REVIEW: "review", COMPLETION: "completion", REPORT: "report" } as const;
 const STATUS_TO_DB = { approved: "APPROVED", rejected: "REJECTED", partial: "PARTIAL" } as const;
 const STATUS_TO_CLIENT = { APPROVED: "approved", REJECTED: "rejected", PARTIAL: "partial" } as const;
 
@@ -11,7 +11,12 @@ const SUBJECT: Record<NotificationKind, string> = {
   toilet: "Ta demande de référencement",
   review: "Ton avis",
   completion: "Ta complétion",
+  report: "Ton signalement",
 };
+
+/** Grammatical gender of each SUBJECT noun, for participle agreement ("approuvée" vs "approuvé"). */
+const FEMININE: Record<NotificationKind, boolean> = { toilet: true, review: false, completion: true, report: false };
+const agree = (participle: string, type: NotificationKind) => (FEMININE[type] ? `${participle}e` : participle);
 
 const FIELD_LABEL: Record<string, string> = {
   name: "le nom",
@@ -26,12 +31,12 @@ const fieldsToText = (fields: string[]) => fields.map((f) => FIELD_LABEL[f] ?? f
 
 function buildMessage(type: NotificationKind, status: NotificationOutcome, kept: string[], rejected: string[]): string {
   const subject = SUBJECT[type];
-  if (status === "approved") return `${subject} a été approuvée ✅`;
-  if (status === "rejected") return `${subject} a été rejetée ❌`;
+  if (status === "approved") return `${subject} a été ${agree("approuvé", type)} ✅`;
+  if (status === "rejected") return `${subject} a été ${agree("rejeté", type)} ❌`;
   const parts: string[] = [];
   if (kept.length) parts.push(`conservé : ${fieldsToText(kept)}`);
   if (rejected.length) parts.push(`retiré : ${fieldsToText(rejected)}`);
-  return `${subject} a été partiellement approuvée ⚠️${parts.length ? ` — ${parts.join(" · ")}` : ""}.`;
+  return `${subject} a été ${agree("partiellement approuvé", type)} ⚠️${parts.length ? ` — ${parts.join(" · ")}` : ""}.`;
 }
 
 /**
@@ -91,4 +96,22 @@ export async function listNotifications(userId: number, cursor: number | null, t
 
 export function unreadCount(userId: number): Promise<number> {
   return prisma.notification.count({ where: { userId, read: false } });
+}
+
+/**
+ * Notifies a toilet's original author that their (previously live) toilet was hidden
+ * or deleted — distinct from `notifyModeration` because this isn't "your submission
+ * was judged", it's "something happened to content you already had approved". Uses
+ * the "toilet" type + "rejected" status so it renders with the same ❌ treatment as
+ * other negative outcomes; `reason` picks accurate wording for the two triggers.
+ */
+export async function notifyToiletRemoved(userId: number | null, toiletId: number, action: "deleted" | "hidden", reason: "report" | "moderator"): Promise<void> {
+  if (userId === null) return;
+  const cause = reason === "report" ? "suite à un signalement validé" : "par la modération";
+  const message =
+    action === "deleted" ? `Ta toilette a été retirée ${cause} 🗑️` : `Ta toilette a été temporairement masquée ${cause} ⚠️`;
+
+  await prisma.notification.create({
+    data: { userId, type: "TOILET", referenceId: toiletId, status: "REJECTED", message },
+  });
 }

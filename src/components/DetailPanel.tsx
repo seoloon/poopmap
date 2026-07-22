@@ -6,6 +6,7 @@ import type { Review, SessionUser, ToiletDetail, ToiletPin } from "@/lib/types";
 import { compressImage } from "@/lib/image";
 import { directionsUrl } from "@/lib/navigation";
 import { toast } from "./Toasts";
+import ReportModal from "./ReportModal";
 
 const NAV_LABELS = [
   "🚀 Lancer l'opération",
@@ -68,6 +69,7 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
   const [detail, setDetail] = useState<ToiletDetail | null>(null);
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [notes, setNotes] = useState({ proprete: 0, confort: 0, experience: 0 });
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
@@ -225,13 +227,23 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
               )}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-ink bg-white font-black transition hover:rotate-90 hover:bg-blush"
-            aria-label="Fermer"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              onClick={() => (me ? setShowReport(true) : onLoginClick())}
+              className="grid h-9 w-9 place-items-center rounded-full border-2 border-ink bg-white text-sm transition hover:-translate-y-0.5 hover:bg-blush"
+              aria-label="Signaler ce spot"
+              title="Signaler ce spot"
+            >
+              🚩
+            </button>
+            <button
+              onClick={onClose}
+              className="grid h-9 w-9 place-items-center rounded-full border-2 border-ink bg-white font-black transition hover:rotate-90 hover:bg-blush"
+              aria-label="Fermer"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Overall score */}
@@ -544,6 +556,8 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
           </p>
         )}
       </div>
+
+      <ReportModal open={showReport} toiletId={pin.id} toiletName={detail?.name ?? null} onClose={() => setShowReport(false)} />
     </motion.aside>
   );
 }

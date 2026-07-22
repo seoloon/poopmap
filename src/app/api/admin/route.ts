@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword, requireRole } from "@/lib/auth";
 import { bumpVersion, listModeratable, listPendingToilets } from "@/lib/toilets";
 import { listCompletionsForAdmin, listReviewsForAdmin } from "@/lib/moderation";
+import { listReportsForAdmin } from "@/lib/reports";
 import { notifyModeration } from "@/lib/notifications";
 import { withApiErrorHandling } from "@/lib/api-error";
 import type { Role } from "@/lib/types";
@@ -21,11 +22,12 @@ export const GET = withApiErrorHandling(async () => {
   const me = await requireRole(["moderator", "admin"]);
   if (!me) return NextResponse.json({ error: "Accès réservé aux modérateurs" }, { status: 403 });
 
-  const [pending, moderation, reviews, completions, users, approved, rejected, userCount, reviewCount] = await Promise.all([
+  const [pending, moderation, reviews, completions, reports, users, approved, rejected, userCount, reviewCount] = await Promise.all([
     listPendingToilets(),
     listModeratable(),
     listReviewsForAdmin(),
     listCompletionsForAdmin(),
+    listReportsForAdmin(),
     prisma.user.findMany({
       orderBy: { id: "asc" },
       include: { _count: { select: { reviews: true } } },
@@ -41,6 +43,7 @@ export const GET = withApiErrorHandling(async () => {
     moderation,
     reviews,
     completions,
+    reports,
     users: users.map((u) => ({
       id: u.id,
       pseudo: u.pseudo,
@@ -57,6 +60,7 @@ export const GET = withApiErrorHandling(async () => {
       users: userCount,
       reviews: reviewCount,
       completions: completions.filter((c) => c.status === "pending").length,
+      reports: reports.reduce((n, g) => n + g.reports.length, 0),
     },
     me,
   });

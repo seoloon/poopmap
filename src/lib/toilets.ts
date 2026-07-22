@@ -3,7 +3,7 @@ import { prisma } from "./prisma";
 import type { AdminModeratableToilet, ToiletDetail, ToiletPin } from "./types";
 
 const KIND_TO_CLIENT = { GRATUIT: "gratuit", PAYANT: "payant", COMMERCE: "commerce" } as const;
-const STATUS_TO_CLIENT = { PENDING: "pending", APPROVED: "approved", REJECTED: "rejected" } as const;
+const STATUS_TO_CLIENT = { PENDING: "pending", APPROVED: "approved", REJECTED: "rejected", HIDDEN: "hidden", DELETED: "deleted" } as const;
 
 export const KIND_TO_DB = { gratuit: "GRATUIT", payant: "PAYANT", commerce: "COMMERCE" } as const;
 
@@ -156,7 +156,7 @@ const MODERATABLE_INCLUDE = {
  */
 export async function listModeratable(): Promise<AdminModeratableToilet[]> {
   const rows = await prisma.toilet.findMany({
-    where: { OR: [{ photos: { some: {} } }, { nameSetById: { not: null } }] },
+    where: { status: { notIn: ["HIDDEN", "DELETED"] }, OR: [{ photos: { some: {} } }, { nameSetById: { not: null } }] },
     include: MODERATABLE_INCLUDE,
     orderBy: { id: "desc" },
     take: 200,
