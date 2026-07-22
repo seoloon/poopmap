@@ -9,6 +9,7 @@ datasource db {
 
 enum UserRole {
   USER
+  MODERATOR
   ADMIN
 }
 
@@ -29,6 +30,17 @@ enum ToiletStatus {
   REJECTED
 }
 
+enum ReviewStatus {
+  PUBLISHED
+  REJECTED
+}
+
+enum CompletionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id            Int      @id @default(autoincrement())
   /// Private login identifier (distinct from the public `pseudo`), stored trimmed + lowercased.
@@ -40,11 +52,13 @@ model User {
   status        UserStatus @default(ACTIVE)
   createdAt     DateTime @default(now()) @map("created_at")
 
-  sessions     Session[]
-  toilets      Toilet[]
-  reviews      Review[]
-  photos       Photo[]
-  toiletsNamed Toilet[] @relation("ToiletNameSetBy")
+  sessions            Session[]
+  toilets             Toilet[]
+  reviews             Review[]
+  photos              Photo[]
+  toiletsNamed        Toilet[]     @relation("ToiletNameSetBy")
+  completions         Completion[]
+  completionsReviewed Completion[] @relation("CompletionReviewedBy")
 
   @@map("users")
 }
@@ -88,28 +102,68 @@ model Toilet {
   nameSetById     Int?         @map("name_set_by")
   nameSetBy       User?        @relation("ToiletNameSetBy", fields: [nameSetById], references: [id], onDelete: SetNull)
 
-  reviews Review[]
-  photos  Photo[]
+  reviews     Review[]
+  photos      Photo[]
+  completions Completion[]
 
   @@index([status])
   @@map("toilets")
 }
 
 model Review {
-  id         Int      @id @default(autoincrement())
-  toiletId   Int      @map("toilet_id")
-  toilet     Toilet   @relation(fields: [toiletId], references: [id], onDelete: Cascade)
-  userId     Int?     @map("user_id")
-  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         Int          @id @default(autoincrement())
+  toiletId   Int          @map("toilet_id")
+  toilet     Toilet       @relation(fields: [toiletId], references: [id], onDelete: Cascade)
+  userId     Int?         @map("user_id")
+  user       User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   pseudo     String
   proprete   Int
   confort    Int
   experience Int
   comment    String?
-  createdAt  DateTime @default(now()) @map("created_at")
+  /// Published by default (visible immediately); a moderator can reject it after the
+  /// fact — same effect as a delete, but keeps the row for audit instead of hard-deleting.
+  status     ReviewStatus @default(PUBLISHED)
+  createdAt  DateTime     @default(now()) @map("created_at")
 
   @@index([toiletId])
+  @@index([status])
   @@map("reviews")
+}
+
+/// A registered user's proposal to fill in missing info (name / address / comment /
+/// photos) on an already-approved toilet. Unlike the old first-come-first-served
+/// auto-apply flow, this now always lands in a moderation queue — fields only merge
+/// into the `Toilet` once a moderator approves it (in full or in part).
+model Completion {
+  id           Int              @id @default(autoincrement())
+  toiletId     Int              @map("toilet_id")
+  toilet       Toilet           @relation(fields: [toiletId], references: [id], onDelete: Cascade)
+  userId       Int              @map("user_id")
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String?
+  address      String?
+  comment      String?
+  status       CompletionStatus @default(PENDING)
+  createdAt    DateTime         @default(now()) @map("created_at")
+  reviewedAt   DateTime?        @map("reviewed_at")
+  reviewedById Int?             @map("reviewed_by")
+  reviewedBy   User?            @relation("CompletionReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  photos CompletionPhoto[]
+
+  @@index([toiletId])
+  @@index([status])
+  @@map("completions")
+}
+
+model CompletionPhoto {
+  id           Int        @id @default(autoincrement())
+  completionId Int        @map("completion_id")
+  completion   Completion @relation(fields: [completionId], references: [id], onDelete: Cascade)
+  url          String
+
+  @@map("completion_photos")
 }
 
 model Photo {

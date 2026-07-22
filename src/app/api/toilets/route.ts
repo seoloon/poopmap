@@ -24,12 +24,15 @@ export const GET = withApiErrorHandling(async (req: NextRequest) => {
   return await jsonResponse({ version, toilets }, req, { headers: { "Cache-Control": "no-store" } });
 });
 
+/** Referencing a new spot requires an account — enforced here, not just hidden in the UI. */
 export const POST = withApiErrorHandling(async (req: NextRequest) => {
   const me = await getSessionUser();
+  if (!me) return NextResponse.json({ error: "Connecte-toi pour référencer un spot" }, { status: 401 });
+
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
 
-  const { name, lat, lng, kind, price, address, description, pseudo, photos } = body as Record<string, unknown>;
+  const { name, lat, lng, kind, price, address, description, photos } = body as Record<string, unknown>;
 
   if (typeof name !== "string" || name.trim().length < 3 || name.trim().length > 80) {
     return NextResponse.json({ error: "Le nom doit faire entre 3 et 80 caractères" }, { status: 400 });
@@ -44,13 +47,6 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
   if (typeof kind !== "string" || !KINDS.includes(kind as ToiletKind)) {
     return NextResponse.json({ error: "Type invalide" }, { status: 400 });
   }
-  let pseudoToUse = me?.pseudo ?? "Anonyme";
-  if (!me) {
-    if (typeof pseudo !== "string" || pseudo.trim().length < 2 || pseudo.trim().length > 24) {
-      return NextResponse.json({ error: "Un pseudo (2 à 24 caractères) est requis sans compte" }, { status: 400 });
-    }
-    pseudoToUse = pseudo.trim();
-  }
   const photoUrls = Array.isArray(photos) ? photos.filter((p): p is string => typeof p === "string").slice(0, MAX_PHOTOS) : [];
 
   const toilet = await prisma.toilet.create({
@@ -63,9 +59,9 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
       address: typeof address === "string" && address.trim() ? address.trim().slice(0, 160) : null,
       description: typeof description === "string" && description.trim() ? description.trim().slice(0, 600) : null,
       status: "PENDING",
-      createdById: me?.id ?? null,
-      createdByPseudo: pseudoToUse,
-      photos: { create: photoUrls.map((url) => ({ url, createdById: me?.id ?? null })) },
+      createdById: me.id,
+      createdByPseudo: me.pseudo,
+      photos: { create: photoUrls.map((url) => ({ url, createdById: me.id })) },
     },
   });
 

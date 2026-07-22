@@ -35,6 +35,8 @@ export type ToiletDetail = ToiletPin & {
   avgC: number;
   avgE: number;
   photos: { id: number; url: string }[];
+  /** The current user's own most recent completion submission on this spot, if any. */
+  myCompletionStatus?: "pending" | "approved" | "rejected";
 };
 
 export type Review = {
@@ -48,10 +50,12 @@ export type Review = {
   mine?: boolean;
 };
 
+export type Role = "user" | "moderator" | "admin";
+
 export type SessionUser = {
   id: number;
   pseudo: string;
-  role: "user" | "admin";
+  role: Role;
   username: string;
 };
 
@@ -59,7 +63,7 @@ export type AdminUserRow = {
   id: number;
   pseudo: string;
   username: string;
-  role: string;
+  role: Role;
   status: string;
   createdAt: string;
   reviewCount: number;
@@ -71,22 +75,13 @@ export type AdminStats = {
   rejected: number;
   users: number;
   reviews: number;
-};
-
-/** Full review detail for moderation — unlike the public `Review`, no 5-item cap. */
-export type AdminReview = {
-  id: number;
-  pseudo: string;
-  proprete: number;
-  confort: number;
-  experience: number;
-  comment: string | null;
-  createdAt: string;
+  completions: number;
 };
 
 /**
- * An approved-or-pending toilet with something for an admin to review: a review, a
- * photo, or a name a user filled in via "complete this spot" (`nameSetById` set).
+ * A toilet carrying published photos and/or a user-supplied name (`nameSetById` set)
+ * — surfaced so an admin can still delete a stray photo or reset a name after the
+ * fact, even though new submissions now flow through the reviews/completions queues.
  */
 export type AdminModeratableToilet = {
   id: number;
@@ -97,6 +92,33 @@ export type AdminModeratableToilet = {
   address: string | null;
   lat: number;
   lng: number;
-  reviews: AdminReview[];
+  photos: { id: number; url: string }[];
+};
+
+/** A published (or rejected) review, flattened with its toilet for the "Avis" tab. */
+export type AdminReviewRow = {
+  id: number;
+  toiletId: number;
+  toiletName: string | null;
+  pseudo: string;
+  proprete: number;
+  confort: number;
+  experience: number;
+  comment: string | null;
+  status: "published" | "rejected";
+  createdAt: string;
+};
+
+/** A "compléter ce spot" submission awaiting (or past) moderation. */
+export type AdminCompletion = {
+  id: number;
+  toiletId: number;
+  toiletName: string | null;
+  userPseudo: string;
+  name: string | null;
+  address: string | null;
+  comment: string | null;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
   photos: { id: number; url: string }[];
 };

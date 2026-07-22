@@ -263,7 +263,7 @@ function Home() {
           </div>
 
           <div className="pointer-events-auto flex items-center gap-2">
-            {me?.role === "admin" && (
+            {(me?.role === "admin" || me?.role === "moderator") && (
               <a href="/admin" className="sticker-sm rounded-xl px-3 py-2 text-sm font-extrabold transition hover:-translate-y-0.5 hover:bg-blush">
                 🛠️ Admin
               </a>
@@ -386,6 +386,10 @@ function Home() {
             setFlyTarget({ ...pos, zoom: 17, ts: Date.now() });
           })
         }
+        onLoginClick={() => {
+          setShowAdd(false);
+          setShowAuth(true);
+        }}
       />
       <AuthModal
         open={showAuth}

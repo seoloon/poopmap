@@ -70,9 +70,10 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
   const [showForm, setShowForm] = useState(false);
   const [notes, setNotes] = useState({ proprete: 0, confort: 0, experience: 0 });
   const [comment, setComment] = useState("");
-  const [pseudo, setPseudo] = useState("");
   const [busy, setBusy] = useState(false);
   const [completeName, setCompleteName] = useState("");
+  const [completeAddress, setCompleteAddress] = useState("");
+  const [completeComment, setCompleteComment] = useState("");
   const [completePhotos, setCompletePhotos] = useState<string[]>([]);
   const [completeBusy, setCompleteBusy] = useState(false);
   const completeFileRef = useRef<HTMLInputElement>(null);
@@ -99,6 +100,8 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
     setNotes({ proprete: 0, confort: 0, experience: 0 });
     setComment("");
     setCompleteName("");
+    setCompleteAddress("");
+    setCompleteComment("");
     setCompletePhotos([]);
     void load();
   }, [load]);
@@ -110,14 +113,13 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
       const res = await fetch(`/api/toilets/${pin.id}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...notes, comment, pseudo }),
+        body: JSON.stringify({ ...notes, comment }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur");
       toast("Merci pour ton avis, la communauté te remercie 💩✨");
       setNotes({ proprete: 0, confort: 0, experience: 0 });
       setComment("");
-      setPseudo("");
       setShowForm(false);
       await load();
       onPosted();
@@ -129,7 +131,10 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
   };
 
   const needsName = detail !== null && detail.name === null;
+  const needsAddress = detail !== null && detail.address === null;
+  const needsComment = detail !== null && detail.description === null;
   const needsPhotos = detail !== null && detail.photos.length === 0;
+  const needsAnything = needsName || needsAddress || needsComment || needsPhotos;
 
   const onCompleteFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -143,7 +148,11 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
     }
   };
 
-  const canSubmitComplete = (needsName && completeName.trim().length >= 3) || (needsPhotos && completePhotos.length > 0);
+  const canSubmitComplete =
+    (needsName && completeName.trim().length >= 3) ||
+    (needsAddress && completeAddress.trim().length > 0) ||
+    (needsComment && completeComment.trim().length > 0) ||
+    (needsPhotos && completePhotos.length > 0);
 
   const submitComplete = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +160,8 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
     try {
       const body: Record<string, unknown> = {};
       if (needsName && completeName.trim().length >= 3) body.name = completeName.trim();
+      if (needsAddress && completeAddress.trim()) body.address = completeAddress.trim();
+      if (needsComment && completeComment.trim()) body.comment = completeComment.trim();
       if (needsPhotos && completePhotos.length > 0) body.photos = completePhotos;
       const res = await fetch(`/api/toilets/${pin.id}/complete`, {
         method: "POST",
@@ -159,8 +170,10 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur");
-      toast("Merci, spot complété 🎉");
+      toast("Merci, ta complétion part en modération 🕵️");
       setCompleteName("");
+      setCompleteAddress("");
+      setCompleteComment("");
       setCompletePhotos([]);
       await load();
     } catch (err) {
@@ -293,32 +306,60 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
           </div>
         )}
 
-        {detail && (needsName || needsPhotos) && (
+        {detail && needsAnything && detail.myCompletionStatus === "pending" && (
+          <div className="rounded-xl border-2 border-dashed border-blue-400 bg-blue-50 p-3.5 text-center">
+            <p className="text-xs font-extrabold text-blue-800">⏳ Ta complétion est en attente de validation</p>
+          </div>
+        )}
+        {detail && needsAnything && detail.myCompletionStatus !== "pending" && (
           <div className="rounded-xl border-2 border-dashed border-teal bg-teal/5 p-3.5">
-            <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-teal-dark">
-              🧩 Aide à compléter ce spot
-            </p>
-            {!me ? (
-              <p className="text-xs font-bold text-ink/60">
-                <button onClick={onLoginClick} className="underline decoration-dotted">
-                  Connecte-toi
-                </button>{" "}
-                pour ajouter {needsName && needsPhotos ? "un nom et des photos" : needsName ? "un nom" : "des photos"} — premier
-                arrivé, premier servi.
+            {detail.myCompletionStatus === "rejected" && (
+              <p className="mb-2 text-xs font-extrabold text-red-700">
+                🚫 Ta dernière complétion a été refusée par la modération — tu peux réessayer ci-dessous.
               </p>
-            ) : (
-              <form onSubmit={submitComplete} className="space-y-2.5">
-                {needsName && (
-                  <input
-                    minLength={3}
-                    maxLength={80}
-                    placeholder="Nom de ce petit coin"
-                    value={completeName}
-                    onChange={(e) => setCompleteName(e.target.value)}
-                    className="w-full rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-teal"
-                  />
-                )}
-                {needsPhotos && (
+            )}
+              <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-teal-dark">
+                🧩 Aide à compléter ce spot
+              </p>
+              {!me ? (
+                <p className="text-xs font-bold text-ink/60">
+                  <button onClick={onLoginClick} className="underline decoration-dotted">
+                    Connecte-toi
+                  </button>{" "}
+                  pour compléter ce spot — ta proposition sera vérifiée par la modération.
+                </p>
+              ) : (
+                <form onSubmit={submitComplete} className="space-y-2.5">
+                  {needsName && (
+                    <input
+                      minLength={3}
+                      maxLength={80}
+                      placeholder="Nom de ce petit coin"
+                      value={completeName}
+                      onChange={(e) => setCompleteName(e.target.value)}
+                      className="w-full rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-teal"
+                    />
+                  )}
+                  {needsAddress && (
+                    <input
+                      maxLength={160}
+                      placeholder="Adresse / point de repère"
+                      value={completeAddress}
+                      onChange={(e) => setCompleteAddress(e.target.value)}
+                      className="w-full rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-teal"
+                    />
+                  )}
+                  {needsComment && (
+                    <textarea
+                      rows={2}
+                      maxLength={600}
+                      placeholder="Un commentaire utile (accès, code porte…)"
+                      value={completeComment}
+                      onChange={(e) => setCompleteComment(e.target.value)}
+                      className="w-full resize-none rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-teal"
+                    />
+                  )}
+                  {needsPhotos && (
                   <div className="flex gap-2">
                     {completePhotos.map((p, i) => (
                       <div key={i} className="relative">
@@ -464,21 +505,10 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
                 onChange={(e) => setComment(e.target.value)}
                 className="w-full resize-none rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-teal"
               />
-              {!me && (
-                <input
-                  required
-                  minLength={2}
-                  maxLength={24}
-                  placeholder="Ton pseudo (requis sans compte)"
-                  value={pseudo}
-                  onChange={(e) => setPseudo(e.target.value)}
-                  className="w-full rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-teal"
-                />
-              )}
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  disabled={busy || !allNoted || (!me && pseudo.trim().length < 2)}
+                  disabled={busy || !allNoted}
                   className="flex-1 rounded-xl border-2 border-ink bg-teal px-4 py-2.5 font-display font-extrabold text-white shadow-[3px_3px_0_#1a1a1a] transition hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
                 >
                   {busy ? "Envoi…" : "Publier mon avis 💩"}
@@ -507,11 +537,10 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
         </AnimatePresence>
         {!me && !showForm && (
           <p className="-mt-2 text-center text-[11px] font-bold text-ink/50">
-            Sans compte, un pseudo te sera demandé (ou{" "}
             <button onClick={onLoginClick} className="underline decoration-dotted">
-              connecte-toi
-            </button>
-            )
+              Connecte-toi
+            </button>{" "}
+            pour laisser un avis
           </p>
         )}
       </div>

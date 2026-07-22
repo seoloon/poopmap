@@ -14,6 +14,7 @@ type Props = {
   onDone: () => void;
   onPickOnMap: () => void;
   onUseMyLocation: () => void;
+  onLoginClick: () => void;
 };
 
 const inputCls =
@@ -25,13 +26,12 @@ const KINDS: { value: ToiletKind; label: string }[] = [
   { value: "commerce", label: "☕ Commerce" },
 ];
 
-export default function AddToiletModal({ open, pos, me, onClose, onDone, onPickOnMap, onUseMyLocation }: Props) {
+export default function AddToiletModal({ open, pos, me, onClose, onDone, onPickOnMap, onUseMyLocation, onLoginClick }: Props) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ToiletKind>("gratuit");
   const [price, setPrice] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
-  const [pseudo, setPseudo] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -56,7 +56,7 @@ export default function AddToiletModal({ open, pos, me, onClose, onDone, onPickO
       const res = await fetch("/api/toilets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, lat: pos.lat, lng: pos.lng, kind, price, address, description, pseudo, photos }),
+        body: JSON.stringify({ name, lat: pos.lat, lng: pos.lng, kind, price, address, description, photos }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'ajout");
@@ -65,7 +65,6 @@ export default function AddToiletModal({ open, pos, me, onClose, onDone, onPickO
       setPrice("");
       setAddress("");
       setDescription("");
-      setPseudo("");
       setPhotos([]);
       setKind("gratuit");
       onDone();
@@ -108,7 +107,20 @@ export default function AddToiletModal({ open, pos, me, onClose, onDone, onPickO
               </button>
             </div>
 
-            {!pos ? (
+            {!me ? (
+              <div className="space-y-3 text-center">
+                <p className="text-4xl">🔒</p>
+                <p className="text-sm font-semibold text-ink/80">
+                  Un compte est requis pour référencer un spot — ça évite les blagues et ça aide la modération.
+                </p>
+                <button
+                  onClick={onLoginClick}
+                  className="w-full rounded-xl border-2 border-ink bg-signage px-4 py-3.5 font-display text-lg font-extrabold shadow-[4px_4px_0_#1a1a1a] transition hover:-translate-y-0.5"
+                >
+                  🔑 Se connecter / s&apos;inscrire
+                </button>
+              </div>
+            ) : !pos ? (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-ink/80">
                   D&apos;abord, indique où se trouve ce trésor de porcelaine :
@@ -230,18 +242,6 @@ export default function AddToiletModal({ open, pos, me, onClose, onDone, onPickO
                     />
                   </div>
                 </div>
-
-                {!me && (
-                  <input
-                    required
-                    minLength={2}
-                    maxLength={24}
-                    placeholder="Ton pseudo de référençeur"
-                    value={pseudo}
-                    onChange={(e) => setPseudo(e.target.value)}
-                    className={inputCls}
-                  />
-                )}
 
                 <button
                   type="submit"

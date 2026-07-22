@@ -11,7 +11,7 @@ export const GET = withApiErrorHandling(async (_req: NextRequest, { params }: { 
   const me = await getSessionUser();
   const toilet = await getToiletDetail(toiletId, me?.id ?? null);
   if (!toilet) return NextResponse.json({ error: "Ce spot n'existe pas" }, { status: 404 });
-  if (toilet.status !== "approved" && !toilet.mine && me?.role !== "admin") {
+  if (toilet.status !== "approved" && !toilet.mine && me?.role !== "admin" && me?.role !== "moderator") {
     return NextResponse.json({ error: "Ce spot n'existe pas" }, { status: 404 });
   }
 

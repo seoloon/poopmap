@@ -6,6 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const me = await getSessionUser();
-  if (!me || me.role !== "admin") redirect("/");
+  if (!me || (me.role !== "admin" && me.role !== "moderator")) redirect("/");
   return <AdminPanel me={me} />;
 }

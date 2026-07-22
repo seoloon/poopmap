@@ -14,7 +14,7 @@ export const GET = withApiErrorHandling(async (_req: NextRequest, { params }: { 
 
   const me = await getSessionUser();
   const rows = await prisma.review.findMany({
-    where: { toiletId },
+    where: { toiletId, status: "PUBLISHED" },
     orderBy: { createdAt: "desc" },
     take: 5,
   });
@@ -33,6 +33,7 @@ export const GET = withApiErrorHandling(async (_req: NextRequest, { params }: { 
   });
 });
 
+/** Posting a review requires an account — enforced here, not just hidden in the UI. */
 export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const toiletId = Number((await params).id);
   if (!Number.isInteger(toiletId)) return NextResponse.json({ error: "Id invalide" }, { status: 400 });
@@ -44,20 +45,14 @@ export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { 
   if (!toilet) return NextResponse.json({ error: "Ce spot n'existe pas" }, { status: 404 });
 
   const me = await getSessionUser();
+  if (!me) return NextResponse.json({ error: "Connecte-toi pour laisser un avis" }, { status: 401 });
+
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
 
-  const { proprete, confort, experience, comment, pseudo } = body as Record<string, unknown>;
+  const { proprete, confort, experience, comment } = body as Record<string, unknown>;
   if (![proprete, confort, experience].every((v) => typeof v === "number" && v >= 1 && v <= 5)) {
     return NextResponse.json({ error: "Les 3 critères doivent être notés de 1 à 5" }, { status: 400 });
-  }
-
-  let pseudoToUse = me?.pseudo ?? "Anonyme";
-  if (!me) {
-    if (typeof pseudo !== "string" || pseudo.trim().length < 2 || pseudo.trim().length > 24) {
-      return NextResponse.json({ error: "Un pseudo (2 à 24 caractères) est requis sans compte" }, { status: 400 });
-    }
-    pseudoToUse = pseudo.trim();
   }
 
   const p = scoreOf(proprete as number);
@@ -73,8 +68,8 @@ export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { 
     prisma.review.create({
       data: {
         toiletId,
-        userId: me?.id ?? null,
-        pseudo: pseudoToUse,
+        userId: me.id,
+        pseudo: me.pseudo,
         proprete: p,
         confort: c,
         experience: e,

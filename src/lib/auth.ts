@@ -2,7 +2,11 @@ import { cookies } from "next/headers";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
-import type { SessionUser } from "./types";
+import type { Role, SessionUser } from "./types";
+
+function dbRoleToClient(role: "USER" | "MODERATOR" | "ADMIN"): Role {
+  return role === "ADMIN" ? "admin" : role === "MODERATOR" ? "moderator" : "user";
+}
 
 export const COOKIE_NAME = "poop_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -29,9 +33,20 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   return {
     id: user.id,
     pseudo: user.pseudo,
-    role: user.role === "ADMIN" ? "admin" : "user",
+    role: dbRoleToClient(user.role),
     username: user.username,
   };
+}
+
+/**
+ * Loads the session user and checks their role against an allowlist in one call —
+ * every moderation endpoint (`/api/admin`, `/api/admin/submissions/[id]/partial`)
+ * gates on this instead of hand-rolling its own role check.
+ */
+export async function requireRole(roles: Role[]): Promise<SessionUser | null> {
+  const me = await getSessionUser();
+  if (!me || !roles.includes(me.role)) return null;
+  return me;
 }
 
 export async function createSession(userId: number) {

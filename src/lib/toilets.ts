@@ -85,7 +85,7 @@ const DETAIL_INCLUDE = {
 
 type DetailRow = Prisma.ToiletGetPayload<{ include: typeof DETAIL_INCLUDE }>;
 
-function mapDetail(t: DetailRow, meId: number | null): ToiletDetail {
+function mapDetail(t: DetailRow, meId: number | null, myCompletionStatus?: ToiletDetail["myCompletionStatus"]): ToiletDetail {
   const n = t.reviews.length;
   const avgP = n ? t.reviews.reduce((s, r) => s + r.proprete, 0) / n : 0;
   const avgC = n ? t.reviews.reduce((s, r) => s + r.confort, 0) / n : 0;
@@ -110,14 +110,27 @@ function mapDetail(t: DetailRow, meId: number | null): ToiletDetail {
     reviewCount: t.reviewCount,
     photos: t.photos.map((p) => ({ id: p.id, url: p.url })),
     mine: meId !== null && t.createdById === meId && t.status === "PENDING",
+    ...(myCompletionStatus ? { myCompletionStatus } : {}),
   };
 }
 
-/** Full detail for a single toilet, fetched when its detail panel opens. */
+const COMPLETION_STATUS_TO_CLIENT = { PENDING: "pending", APPROVED: "approved", REJECTED: "rejected" } as const;
+
+/**
+ * Full detail for a single toilet, fetched when its detail panel opens. When `meId`
+ * has an in-flight or past "compléter ce spot" submission on this toilet, its
+ * status rides along so the UI can show "en attente de validation" / "refusée"
+ * instead of the completion form re-appearing as if nothing was submitted.
+ */
 export async function getToiletDetail(id: number, meId: number | null): Promise<ToiletDetail | null> {
-  const row = await prisma.toilet.findUnique({ where: { id }, include: DETAIL_INCLUDE });
+  const [row, myCompletion] = await Promise.all([
+    prisma.toilet.findUnique({ where: { id }, include: DETAIL_INCLUDE }),
+    meId !== null
+      ? prisma.completion.findFirst({ where: { toiletId: id, userId: meId }, orderBy: { createdAt: "desc" }, select: { status: true } })
+      : null,
+  ]);
   if (!row) return null;
-  return mapDetail(row, meId);
+  return mapDetail(row, meId, myCompletion ? COMPLETION_STATUS_TO_CLIENT[myCompletion.status] : undefined);
 }
 
 /** All pending toilets, for the admin verification queue (small list — full detail is fine). */
@@ -131,23 +144,19 @@ export async function listPendingToilets(): Promise<ToiletDetail[]> {
 }
 
 const MODERATABLE_INCLUDE = {
-  reviews: {
-    select: { id: true, pseudo: true, proprete: true, confort: true, experience: true, comment: true, createdAt: true },
-    orderBy: { createdAt: "desc" as const },
-  },
   photos: { select: { id: true, url: true }, orderBy: { id: "asc" as const } },
 } satisfies Prisma.ToiletInclude;
 
 /**
- * Toilets with user-generated content worth moderating (a review, a photo, or a
- * user-supplied name) — this is deliberately not "every toilet": most OSM-seeded rows
- * have none of these, so this list stays small even at OSM scale. Reviews here are NOT
- * capped at 5 (unlike the public endpoint) since an admin needs to be able to remove
- * any of them, not just the latest.
+ * Toilets carrying a published photo and/or a user-supplied name (`nameSetById`) —
+ * reviews are moderated separately (flat list, see `listReviewsForAdmin` in
+ * `moderation.ts`); this stays deliberately narrow so an admin can still delete a
+ * stray photo or reset a name after the fact, without re-litigating everything that
+ * already went through the toilet/completion queues.
  */
 export async function listModeratable(): Promise<AdminModeratableToilet[]> {
   const rows = await prisma.toilet.findMany({
-    where: { OR: [{ reviewCount: { gt: 0 } }, { photos: { some: {} } }, { nameSetById: { not: null } }] },
+    where: { OR: [{ photos: { some: {} } }, { nameSetById: { not: null } }] },
     include: MODERATABLE_INCLUDE,
     orderBy: { id: "desc" },
     take: 200,
@@ -160,15 +169,6 @@ export async function listModeratable(): Promise<AdminModeratableToilet[]> {
     address: t.address,
     lat: t.lat,
     lng: t.lng,
-    reviews: t.reviews.map((r) => ({
-      id: r.id,
-      pseudo: r.pseudo,
-      proprete: r.proprete,
-      confort: r.confort,
-      experience: r.experience,
-      comment: r.comment,
-      createdAt: r.createdAt.toISOString(),
-    })),
     photos: t.photos.map((p) => ({ id: p.id, url: p.url })),
   }));
 }

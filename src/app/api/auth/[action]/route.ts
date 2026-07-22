@@ -7,7 +7,8 @@ import { clientIp, isRateLimited } from "@/lib/rate-limit";
 import type { SessionUser } from "@/lib/types";
 
 function toSessionUser(u: { id: number; pseudo: string; role: string; username: string }): SessionUser {
-  return { id: u.id, pseudo: u.pseudo, role: u.role === "ADMIN" ? "admin" : "user", username: u.username };
+  const role = u.role === "ADMIN" ? "admin" : u.role === "MODERATOR" ? "moderator" : "user";
+  return { id: u.id, pseudo: u.pseudo, role, username: u.username };
 }
 
 const isValidUsername = (v: unknown): v is string => typeof v === "string" && /^[a-zA-Z0-9_.-]{3,20}$/.test(v);
