@@ -19,8 +19,6 @@ const CATEGORY_TO_CLIENT = {
   UNSAFE: "unsafe",
   OTHER: "other",
 } as const;
-const STATUS_TO_CLIENT = { PENDING: "pending", APPROVED: "approved", REJECTED: "rejected", HIDDEN: "hidden", DELETED: "deleted" } as const;
-
 type CreateReportResult = { ok: true; id: number } | { ok: false; error: string; status: number };
 
 /**
@@ -48,14 +46,14 @@ export async function listReportsForAdmin(): Promise<AdminReportGroup[]> {
   const rows = await prisma.report.findMany({
     where: { status: "PENDING" },
     orderBy: { createdAt: "asc" },
-    include: { user: { select: { pseudo: true } }, toilet: { select: { id: true, name: true, status: true } } },
+    include: { user: { select: { pseudo: true } }, toilet: { select: { id: true, name: true } } },
   });
 
   const groups = new Map<number, AdminReportGroup>();
   for (const r of rows) {
     let group = groups.get(r.toiletId);
     if (!group) {
-      group = { toiletId: r.toiletId, toiletName: r.toilet.name, toiletStatus: STATUS_TO_CLIENT[r.toilet.status], reports: [] };
+      group = { toiletId: r.toiletId, toiletName: r.toilet.name, reports: [] };
       groups.set(r.toiletId, group);
     }
     group.reports.push({
@@ -67,10 +65,6 @@ export async function listReportsForAdmin(): Promise<AdminReportGroup[]> {
     });
   }
   return [...groups.values()];
-}
-
-export function pendingReportCount(): Promise<number> {
-  return prisma.report.count({ where: { status: "PENDING" } });
 }
 
 type ResolveOpts = { decision: "approve" | "reject"; resolution?: "delete" | "hide" | "keep"; modComment: string | null };

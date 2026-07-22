@@ -91,8 +91,6 @@ export type AdminModeratableToilet = {
   nameSetById: number | null;
   kind: ToiletKind;
   address: string | null;
-  lat: number;
-  lng: number;
   photos: { id: number; url: string }[];
 };
 
@@ -165,6 +163,5 @@ export type AdminReport = {
 export type AdminReportGroup = {
   toiletId: number;
   toiletName: string | null;
-  toiletStatus: ToiletStatus;
   reports: AdminReport[];
 };

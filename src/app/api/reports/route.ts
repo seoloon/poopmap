@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { createReport } from "@/lib/reports";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
+import { isRateLimited } from "@/lib/rate-limit";
 import { REPORT_CATEGORIES } from "@/lib/types";
 import type { ReportCategory } from "@/lib/types";
 
@@ -9,8 +10,14 @@ const VALID_CATEGORIES = new Set(REPORT_CATEGORIES.map((c) => c.value));
 
 /** Files a report against an approved toilet. Registered users only. */
 export const POST = withApiErrorHandling(async (req: NextRequest) => {
+  const tooBig = payloadTooLarge(req, 16_384);
+  if (tooBig) return tooBig;
+
   const me = await getSessionUser();
   if (!me) return NextResponse.json({ error: "Connecte-toi pour signaler ce spot" }, { status: 401 });
+  if (isRateLimited(`report:${me.id}`, 5)) {
+    return NextResponse.json({ error: "Doucement — trop de signalements d'un coup, réessaie dans quelques minutes" }, { status: 429 });
+  }
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const { toiletId, category, description } = body;

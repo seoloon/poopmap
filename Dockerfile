@@ -5,6 +5,8 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json package-lock.json* ./
+# Deliberately `npm install`, not `npm ci`: ci has repeatedly failed in this build
+# environment despite several attempted fixes — don't "fix" this back.
 RUN npm install
 
 FROM base AS builder

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createSession, destroySession, getSessionUser, hashPassword, verifyPassword } from "@/lib/auth";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
 import { clientIp, isRateLimited } from "@/lib/rate-limit";
 import type { SessionUser } from "@/lib/types";
 
@@ -32,6 +32,9 @@ export const GET = withApiErrorHandling(async (_req: NextRequest, { params }: { 
 });
 
 export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { params: Promise<{ action: string }> }) => {
+  const tooBig = payloadTooLarge(req, 4_096);
+  if (tooBig) return tooBig;
+
   const { action } = await params;
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 

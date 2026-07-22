@@ -50,6 +50,11 @@ export async function requireRole(roles: Role[]): Promise<SessionUser | null> {
 }
 
 export async function createSession(userId: number) {
+  // Opportunistic hygiene: expired sessions are otherwise never removed and the table
+  // grows forever. Logins are rare enough that piggybacking the purge here costs
+  // nothing, and it keeps the hot `findUnique({ token })` lookup on a small table.
+  await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await prisma.session.create({ data: { userId, token, expiresAt } });

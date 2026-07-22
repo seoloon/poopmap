@@ -167,8 +167,6 @@ export async function listModeratable(): Promise<AdminModeratableToilet[]> {
     nameSetById: t.nameSetById,
     kind: KIND_TO_CLIENT[t.kind],
     address: t.address,
-    lat: t.lat,
-    lng: t.lng,
     photos: t.photos.map((p) => ({ id: p.id, url: p.url })),
   }));
 }

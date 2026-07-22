@@ -5,7 +5,7 @@ import { bumpVersion, listModeratable, listPendingToilets } from "@/lib/toilets"
 import { listCompletionsForAdmin, listReviewsForAdmin } from "@/lib/moderation";
 import { listReportsForAdmin } from "@/lib/reports";
 import { notifyModeration } from "@/lib/notifications";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
 import type { Role } from "@/lib/types";
 
 const DB_ROLE: Record<Role, "USER" | "MODERATOR" | "ADMIN"> = { user: "USER", moderator: "MODERATOR", admin: "ADMIN" };
@@ -67,6 +67,9 @@ export const GET = withApiErrorHandling(async () => {
 });
 
 export const POST = withApiErrorHandling(async (req: NextRequest) => {
+  const tooBig = payloadTooLarge(req, 16_384);
+  if (tooBig) return tooBig;
+
   const me = await requireRole(["moderator", "admin"]);
   if (!me) return NextResponse.json({ error: "Accès réservé aux modérateurs" }, { status: 403 });
 

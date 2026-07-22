@@ -17,6 +17,22 @@ export function dbUnavailableResponse() {
 }
 
 /**
+ * First-line body-size guard: rejects a request whose declared Content-Length exceeds
+ * `maxBytes` before the body is ever read/parsed. Browsers (and fetch/axios/curl with
+ * a non-streamed body) always send Content-Length, so this stops the realistic
+ * "POST me a 100 MB JSON" memory/CPU DoS; a deliberately chunked request without the
+ * header falls through to the reverse proxy's own limit and the per-field validation
+ * (photo string caps etc.) in each route.
+ */
+export function payloadTooLarge(req: Request, maxBytes: number): NextResponse | null {
+  const len = Number(req.headers.get("content-length"));
+  if (Number.isFinite(len) && len > maxBytes) {
+    return NextResponse.json({ error: "Requête trop volumineuse" }, { status: 413 });
+  }
+  return null;
+}
+
+/**
  * Wraps a route handler so a DB outage becomes a clean 503 instead of an unhandled
  * exception (which Next.js logs as a scary, misleading stack-trace dump on every request).
  */

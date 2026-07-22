@@ -1,31 +1,16 @@
+# The database is NOT part of this compose file: in production (Dokploy) Postgres
+# runs as its own managed service, and locally the dev flow targets a native
+# Postgres on localhost:5432 (see .env). This file only defines the app itself.
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: poopmap
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   app:
     build: .
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/poopmap
+      # Point at the external Postgres service (Dokploy internal hostname or similar).
+      DATABASE_URL: postgresql://postgres:postgres@your-db-host:5432/poopmap
       # /!\ Required — no default admin account exists. Set real values before starting.
       ADMIN_USERNAME: change-me-admin
       ADMIN_PASSWORD: change-me-please-a-strong-password
       OVERPASS_URL: https://overpass-api.de/api/interpreter
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  pgdata:

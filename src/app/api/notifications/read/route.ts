@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
 
 /**
  * Marks one notification (`{ id }`) or all of them (`{ all: true }`) as read.
@@ -9,6 +9,9 @@ import { withApiErrorHandling } from "@/lib/api-error";
  * there's no window where passing someone else's notification id touches their row.
  */
 export const PATCH = withApiErrorHandling(async (req: NextRequest) => {
+  const tooBig = payloadTooLarge(req, 4_096);
+  if (tooBig) return tooBig;
+
   const me = await getSessionUser();
   if (!me) return NextResponse.json({ error: "Connecte-toi pour gérer tes notifications" }, { status: 401 });
 

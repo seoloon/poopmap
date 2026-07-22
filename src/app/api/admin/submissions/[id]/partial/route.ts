@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { moderateCompletion, moderateReview, moderateToilet } from "@/lib/moderation";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
 
 const TYPES = ["toilet", "review", "completion"] as const;
 type SubmissionType = (typeof TYPES)[number];
@@ -13,6 +13,9 @@ type SubmissionType = (typeof TYPES)[number];
  * submitted but drop their comment, then approve the rest.
  */
 export const PATCH = withApiErrorHandling(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const tooBig = payloadTooLarge(req, 16_384);
+  if (tooBig) return tooBig;
+
   const me = await requireRole(["moderator", "admin"]);
   if (!me) return NextResponse.json({ error: "Accès réservé aux modérateurs" }, { status: 403 });
 

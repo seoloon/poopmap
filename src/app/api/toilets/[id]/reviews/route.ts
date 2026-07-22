@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { bumpVersion } from "@/lib/toilets";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
+import { isRateLimited } from "@/lib/rate-limit";
 
 function scoreOf(n: number) {
   return Math.min(5, Math.max(1, Math.round(n)));
@@ -35,6 +36,9 @@ export const GET = withApiErrorHandling(async (_req: NextRequest, { params }: { 
 
 /** Posting a review requires an account — enforced here, not just hidden in the UI. */
 export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const tooBig = payloadTooLarge(req, 16_384);
+  if (tooBig) return tooBig;
+
   const toiletId = Number((await params).id);
   if (!Number.isInteger(toiletId)) return NextResponse.json({ error: "Id invalide" }, { status: 400 });
 
@@ -46,6 +50,9 @@ export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { 
 
   const me = await getSessionUser();
   if (!me) return NextResponse.json({ error: "Connecte-toi pour laisser un avis" }, { status: 401 });
+  if (isRateLimited(`review:${me.id}`, 10)) {
+    return NextResponse.json({ error: "Doucement — trop d'avis d'un coup, réessaie dans quelques minutes" }, { status: 429 });
+  }
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });

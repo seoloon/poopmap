@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { listReportsForAdmin, resolveReports } from "@/lib/reports";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
 
 export const GET = withApiErrorHandling(async () => {
   const me = await requireRole(["moderator", "admin"]);
@@ -19,6 +19,9 @@ const RESOLUTIONS = new Set(["delete", "hide", "keep"]);
  * admin-only.
  */
 export const PATCH = withApiErrorHandling(async (req: NextRequest) => {
+  const tooBig = payloadTooLarge(req, 16_384);
+  if (tooBig) return tooBig;
+
   const me = await requireRole(["moderator", "admin"]);
   if (!me) return NextResponse.json({ error: "Accès réservé aux modérateurs" }, { status: 403 });
 

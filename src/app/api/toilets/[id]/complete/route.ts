@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { withApiErrorHandling } from "@/lib/api-error";
+import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
+import { sanitizePhotos } from "@/lib/photos";
+import { isRateLimited } from "@/lib/rate-limit";
 
 const MAX_PHOTOS = 3;
+const MAX_BODY_BYTES = 2_500_000;
 
 /**
  * Proposes filling in missing info (name / address / comment / photo(s)) on an
@@ -13,11 +16,17 @@ const MAX_PHOTOS = 3;
  * `moderateCompletion` in `lib/moderation.ts`.
  */
 export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const tooBig = payloadTooLarge(req, MAX_BODY_BYTES);
+  if (tooBig) return tooBig;
+
   const toiletId = Number((await params).id);
   if (!Number.isInteger(toiletId)) return NextResponse.json({ error: "Id invalide" }, { status: 400 });
 
   const me = await getSessionUser();
   if (!me) return NextResponse.json({ error: "Connecte-toi pour compléter ce spot" }, { status: 401 });
+  if (isRateLimited(`complete:${me.id}`, 5)) {
+    return NextResponse.json({ error: "Doucement — trop de complétions d'un coup, réessaie dans quelques minutes" }, { status: 429 });
+  }
 
   const toilet = await prisma.toilet.findUnique({
     where: { id: toiletId },
@@ -61,7 +70,7 @@ export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { 
     return NextResponse.json({ error: "Une complétion est déjà en attente de validation pour ce spot 🏃" }, { status: 409 });
   }
 
-  const urls = photosActionable ? (photos as unknown[]).filter((p): p is string => typeof p === "string").slice(0, MAX_PHOTOS) : [];
+  const urls = photosActionable ? sanitizePhotos(photos, MAX_PHOTOS) : [];
 
   const completion = await prisma.completion.create({
     data: {

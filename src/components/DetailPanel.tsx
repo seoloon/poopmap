@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { Review, SessionUser, ToiletDetail, ToiletPin } from "@/lib/types";
 import { compressImage } from "@/lib/image";
 import { directionsUrl } from "@/lib/navigation";
+import { relDate } from "@/lib/dates";
 import { toast } from "./Toasts";
 import ReportModal from "./ReportModal";
 
@@ -23,17 +24,6 @@ const CRITERIA = [
   { key: "confort", label: "Confort", emoji: "🛋️", bar: "bg-terracotta", hint: ["spartiate", "bof", "ok", "cozy", "palace royal"] },
   { key: "experience", label: "Expérience", emoji: "✨", bar: "bg-teal", hint: ["traumatisante", "anecdotique", "neutre", "agréable", "extatique"] },
 ] as const;
-
-function relDate(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "à l'instant";
-  if (min < 60) return `il y a ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `il y a ${h} h`;
-  const d = Math.floor(h / 24);
-  return `il y a ${d} j`;
-}
 
 function PoopScale({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
