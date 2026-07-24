@@ -152,11 +152,14 @@ const MODERATABLE_INCLUDE = {
  * reviews are moderated separately (flat list, see `listReviewsForAdmin` in
  * `moderation.ts`); this stays deliberately narrow so an admin can still delete a
  * stray photo or reset a name after the fact, without re-litigating everything that
- * already went through the toilet/completion queues.
+ * already went through the toilet/completion queues. PENDING toilets are excluded:
+ * their photos already surface on the pending-request card itself (queue tab), and
+ * everything else here — merged completion photos, OSM/Wikimedia stock photos — is
+ * shown alongside completions, since that's functionally what they are.
  */
 export async function listModeratable(): Promise<AdminModeratableToilet[]> {
   const rows = await prisma.toilet.findMany({
-    where: { status: { notIn: ["HIDDEN", "DELETED"] }, OR: [{ photos: { some: {} } }, { nameSetById: { not: null } }] },
+    where: { status: { notIn: ["HIDDEN", "DELETED", "PENDING"] }, OR: [{ photos: { some: {} } }, { nameSetById: { not: null } }] },
     include: MODERATABLE_INCLUDE,
     orderBy: { id: "desc" },
     take: 200,

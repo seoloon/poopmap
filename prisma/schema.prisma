@@ -104,6 +104,7 @@ model User {
   toiletsDeleted      Toilet[]       @relation("ToiletDeletedBy")
   completions         Completion[]
   completionsReviewed Completion[]   @relation("CompletionReviewedBy")
+  reviewsModerated    Review[]       @relation("ReviewModeratedBy")
   notifications       Notification[]
   reports             Report[]       @relation("ReportedBy")
   reportsResolved     Report[]       @relation("ReportResolvedBy")
@@ -179,9 +180,15 @@ model Review {
   /// fact — same effect as a delete, but keeps the row for audit instead of hard-deleting.
   status     ReviewStatus @default(PUBLISHED)
   createdAt  DateTime     @default(now()) @map("created_at")
+  /// Set once a moderator explicitly publishes/rejects this review. Null means it's
+  /// still auto-published-but-unreviewed — the moderation queue only shows those.
+  moderatedAt   DateTime? @map("moderated_at")
+  moderatedById Int?      @map("moderated_by")
+  moderatedBy   User?     @relation("ReviewModeratedBy", fields: [moderatedById], references: [id], onDelete: SetNull)
 
   @@index([toiletId])
   @@index([status])
+  @@index([moderatedAt])
   @@map("reviews")
 }
 

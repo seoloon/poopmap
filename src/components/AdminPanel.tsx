@@ -206,9 +206,9 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
         ) : tab === "queue" ? (
           <QueueTab pending={data.pending} act={act} partial={partial} del={del} />
         ) : tab === "avis" ? (
-          <AvisTab reviews={data.reviews} moderation={data.moderation} partial={partial} act={act} del={del} />
+          <AvisTab reviews={data.reviews} partial={partial} />
         ) : tab === "completions" ? (
-          <CompletionsTab completions={data.completions} partial={partial} />
+          <CompletionsTab completions={data.completions} moderation={data.moderation} partial={partial} act={act} del={del} />
         ) : tab === "reports" ? (
           <ReportsTab groups={data.reports} onResolve={resolveReport} />
         ) : (
@@ -516,89 +516,21 @@ function PendingToiletCard({ t, act, partial, del }: { t: ToiletDetail; act: Act
   );
 }
 
-function AvisTab({
-  reviews,
-  moderation,
-  partial,
-  act,
-  del,
-}: {
-  reviews: AdminReviewRow[];
-  moderation: AdminModeratableToilet[];
-  partial: PartialFn;
-  act: ActFn;
-  del: DelFn;
-}) {
+function AvisTab({ reviews, partial }: { reviews: AdminReviewRow[]; partial: PartialFn }) {
+  if (reviews.length === 0) {
+    return (
+      <div className="sticker px-6 py-10 text-center">
+        <p className="text-4xl">🧼</p>
+        <p className="mt-2 font-display text-xl font-extrabold">Aucun avis à modérer</p>
+      </div>
+    );
+  }
   return (
-    <div className="space-y-5">
-      {reviews.length === 0 ? (
-        <div className="sticker px-6 py-10 text-center">
-          <p className="text-4xl">🧼</p>
-          <p className="mt-2 font-display text-xl font-extrabold">Aucun avis</p>
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {reviews.map((r) => (
-            <ReviewCard key={r.id} r={r} partial={partial} />
-          ))}
-        </ul>
-      )}
-
-      {moderation.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-ink/60">🖼️ Noms & photos publiés</p>
-          <ul className="space-y-2.5">
-            {moderation.map((t) => (
-              <li key={t.id} className="sticker p-3.5">
-                <div>
-                  <p className="font-display text-base font-extrabold leading-tight">
-                    {t.name ?? <span className="italic text-ink/40">Toilette sans nom</span>}
-                  </p>
-                  <p className="text-xs font-bold text-ink/60">
-                    {t.kind}
-                    {t.address && ` · 📍 ${t.address}`}
-                  </p>
-                </div>
-                {t.photos.length > 0 && (
-                  <div className="no-scrollbar mt-2.5 flex gap-2 overflow-x-auto">
-                    {t.photos.map((p) => (
-                      <div key={p.id} className="relative shrink-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.url} alt="" className="h-20 w-28 rounded-lg border-2 border-ink object-cover" />
-                        <button
-                          onClick={() => void act("deletephoto", p.id, undefined, "Photo supprimée 🗑️")}
-                          className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full border-2 border-ink bg-red-500 text-[10px] font-black text-white"
-                          aria-label="Supprimer la photo"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {t.nameSetById !== null && (
-                    <button
-                      onClick={() => {
-                        if (confirm("Réinitialiser le nom de ce spot ? Il redeviendra proposable par quelqu'un d'autre."))
-                          void act("resetname", t.id, undefined, "Nom réinitialisé 🔄");
-                      }}
-                      className={btnGhost}
-                    >
-                      🔄 Nom
-                    </button>
-                  )}
-                  <a href={`/?focus=${t.id}`} className={btnGhost}>
-                    🗺️ Carte
-                  </a>
-                  <DeleteToiletButton toiletId={t.id} toiletName={t.name ?? "Toilette sans nom"} del={del} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    <ul className="space-y-3">
+      {reviews.map((r) => (
+        <ReviewCard key={r.id} r={r} partial={partial} />
+      ))}
+    </ul>
   );
 }
 
@@ -654,22 +586,92 @@ function ReviewCard({ r, partial }: { r: AdminReviewRow; partial: PartialFn }) {
   );
 }
 
-function CompletionsTab({ completions, partial }: { completions: AdminCompletion[]; partial: PartialFn }) {
-  if (completions.length === 0) {
-    return (
-      <div className="sticker px-6 py-10 text-center">
-        <p className="text-4xl">🧩</p>
-        <p className="mt-2 font-display text-xl font-extrabold">Aucune complétion</p>
-        <p className="text-sm font-bold text-ink/60">Personne n&apos;a proposé d&apos;info manquante pour l&apos;instant.</p>
-      </div>
-    );
-  }
+function CompletionsTab({
+  completions,
+  moderation,
+  partial,
+  act,
+  del,
+}: {
+  completions: AdminCompletion[];
+  moderation: AdminModeratableToilet[];
+  partial: PartialFn;
+  act: ActFn;
+  del: DelFn;
+}) {
   return (
-    <ul className="space-y-3">
-      {completions.map((c) => (
-        <CompletionCard key={c.id} c={c} partial={partial} />
-      ))}
-    </ul>
+    <div className="space-y-5">
+      {completions.length === 0 ? (
+        <div className="sticker px-6 py-10 text-center">
+          <p className="text-4xl">🧩</p>
+          <p className="mt-2 font-display text-xl font-extrabold">Aucune complétion</p>
+          <p className="text-sm font-bold text-ink/60">Personne n&apos;a proposé d&apos;info manquante pour l&apos;instant.</p>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {completions.map((c) => (
+            <CompletionCard key={c.id} c={c} partial={partial} />
+          ))}
+        </ul>
+      )}
+
+      {moderation.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-ink/60">
+            🖼️ Noms & photos publiés <span className="normal-case text-ink/40">(complétions déjà fondues dans la fiche, photos libres de droits incluses)</span>
+          </p>
+          <ul className="space-y-2.5">
+            {moderation.map((t) => (
+              <li key={t.id} className="sticker p-3.5">
+                <div>
+                  <p className="font-display text-base font-extrabold leading-tight">
+                    {t.name ?? <span className="italic text-ink/40">Toilette sans nom</span>}
+                  </p>
+                  <p className="text-xs font-bold text-ink/60">
+                    {t.kind}
+                    {t.address && ` · 📍 ${t.address}`}
+                  </p>
+                </div>
+                {t.photos.length > 0 && (
+                  <div className="no-scrollbar mt-2.5 flex gap-2 overflow-x-auto">
+                    {t.photos.map((p) => (
+                      <div key={p.id} className="relative shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.url} alt="" className="h-20 w-28 rounded-lg border-2 border-ink object-cover" />
+                        <button
+                          onClick={() => void act("deletephoto", p.id, undefined, "Photo supprimée 🗑️")}
+                          className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full border-2 border-ink bg-red-500 text-[10px] font-black text-white"
+                          aria-label="Supprimer la photo"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {t.nameSetById !== null && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Réinitialiser le nom de ce spot ? Il redeviendra proposable par quelqu'un d'autre."))
+                          void act("resetname", t.id, undefined, "Nom réinitialisé 🔄");
+                      }}
+                      className={btnGhost}
+                    >
+                      🔄 Nom
+                    </button>
+                  )}
+                  <a href={`/?focus=${t.id}`} className={btnGhost}>
+                    🗺️ Carte
+                  </a>
+                  <DeleteToiletButton toiletId={t.id} toiletName={t.name ?? "Toilette sans nom"} del={del} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

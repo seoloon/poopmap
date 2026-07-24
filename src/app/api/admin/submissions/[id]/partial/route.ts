@@ -38,7 +38,7 @@ export const PATCH = withApiErrorHandling(async (req: NextRequest, { params }: {
       ? await moderateToilet(id, opts)
       : type === "completion"
         ? await moderateCompletion(id, me.id, opts)
-        : await moderateReview(id, opts);
+        : await moderateReview(id, me.id, opts);
 
   if (!result) return NextResponse.json({ error: "Introuvable ou déjà traité" }, { status: 404 });
   return NextResponse.json({ ok: true, ...result });

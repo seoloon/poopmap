@@ -3,9 +3,15 @@ import { bumpVersion, KIND_TO_DB } from "./toilets";
 import { notifyModeration } from "./notifications";
 import type { AdminCompletion, AdminReviewRow, ToiletKind } from "./types";
 
-/** Latest reviews, flattened with their toilet — the "Avis" tab's data source. */
+/**
+ * Reviews still awaiting an explicit moderator decision — the "Avis" tab's data
+ * source. A review is auto-published on submission (no "pending" state of its own),
+ * so `moderatedAt` is what tracks whether a moderator has actually looked at it;
+ * once they publish or reject it, it drops off this list for good.
+ */
 export async function listReviewsForAdmin(): Promise<AdminReviewRow[]> {
   const rows = await prisma.review.findMany({
+    where: { moderatedAt: null },
     orderBy: { createdAt: "desc" },
     take: 200,
     include: { toilet: { select: { id: true, name: true } } },
@@ -168,14 +174,19 @@ export async function moderateCompletion(
  * `commentOverride` (including explicit `null`) lets a moderator strip a bad comment
  * while keeping the review itself published — the "reject one field" case.
  */
-async function setReviewStatus(reviewId: number, status: "PUBLISHED" | "REJECTED", commentOverride: string | null | undefined) {
+async function setReviewStatus(
+  reviewId: number,
+  status: "PUBLISHED" | "REJECTED",
+  commentOverride: string | null | undefined,
+  moderatorId: number
+) {
   const review = await prisma.review.findUnique({
     where: { id: reviewId },
     select: { toiletId: true, proprete: true, confort: true, experience: true, status: true },
   });
   if (!review) return false;
 
-  const data: Record<string, unknown> = { status };
+  const data: Record<string, unknown> = { status, moderatedAt: new Date(), moderatedById: moderatorId };
   if (commentOverride !== undefined) data.comment = commentOverride;
 
   if (review.status !== status) {
@@ -195,14 +206,14 @@ async function setReviewStatus(reviewId: number, status: "PUBLISHED" | "REJECTED
 }
 
 /** Moderates a review: `approveRest: false` rejects it, `true` (re-)publishes it. */
-export async function moderateReview(id: number, opts: PartialOpts): Promise<{ status: "published" | "rejected" } | null> {
+export async function moderateReview(id: number, moderatorId: number, opts: PartialOpts): Promise<{ status: "published" | "rejected" } | null> {
   const review = await prisma.review.findUnique({ where: { id }, select: { userId: true, toiletId: true, comment: true } });
   if (!review) return null;
 
   const targetStatus = opts.approveRest ? "PUBLISHED" : "REJECTED";
   const commentOverride = opts.rejectedFields.includes("comment") ? null : opts.edits.comment !== undefined ? opts.edits.comment.trim().slice(0, 600) || null : undefined;
 
-  const ok = await setReviewStatus(id, targetStatus, commentOverride);
+  const ok = await setReviewStatus(id, targetStatus, commentOverride, moderatorId);
   if (!ok) return null;
 
   const commentStripped = review.comment !== null && commentOverride === null;
