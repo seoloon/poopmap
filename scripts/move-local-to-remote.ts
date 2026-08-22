@@ -1,4 +1,12 @@
-import "dotenv/config";
+// No `dotenv/config` import here: in production, env vars come from Dokploy's
+// environment injection, not a `.env` file. Loading dotenv would pull its
+// CommonJS `require('path')` into this file's import graph, which breaks when
+// Next.js bundles `src/instrumentation.ts` (which imports `runMove` from this
+// file) for the edge runtime target — even though `register()` guards against
+// running on edge at runtime, Next still statically resolves the import graph
+// for both targets at build time. Running this script standalone for local
+// testing now requires passing env vars on the command line, e.g.:
+//   LOCAL_MEDIA_DIR=... REMOTE_MEDIA_DIR=... npx tsx scripts/move-local-to-remote.ts
 import { copyFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { localMediaDir, remoteMediaDir } from "../src/lib/media";

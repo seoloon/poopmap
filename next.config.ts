@@ -3,6 +3,18 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Standalone output keeps the Docker runtime image small.
   output: "standalone",
+  webpack: (config, { nextRuntime }) => {
+    if (nextRuntime === "edge") {
+      config.externals = [
+        ...(Array.isArray(config.externals) ? config.externals : []),
+        "node:fs/promises",
+        "node:fs",
+        "node:path",
+        "node:crypto",
+      ];
+    }
+    return config;
+  },
   // No reason to advertise the framework on every response.
   poweredByHeader: false,
   async headers() {

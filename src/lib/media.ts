@@ -1,6 +1,12 @@
 import { stat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+// Uses the global `crypto.randomUUID()` (Node 19+, also available in the edge
+// runtime's Web Crypto API) rather than `import { randomUUID } from "node:crypto"`.
+// `src/instrumentation.ts` reaches this module through a dynamic import that Next
+// bundles for both the nodejs and edge runtime targets at build time (even though
+// only the nodejs branch ever runs it), and the edge bundler can't resolve
+// `node:crypto` — it broke `GET /` app-wide. The global accessor sidesteps that
+// entirely since it needs no module import.
 
 /**
  * Directory for freshly uploaded photos. The weekly job (see
@@ -75,7 +81,7 @@ export async function saveUploadedPhoto(dataUrl: string): Promise<string> {
   if (!match) throw new Error("Invalid photo data-URL");
   const [, mime, base64] = match;
   const ext = MIME_TO_EXT[mime];
-  const filename = `${randomUUID()}.${ext}`;
+  const filename = `${crypto.randomUUID()}.${ext}`;
   const dir = localMediaDir();
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, filename), Buffer.from(base64, "base64"));
