@@ -7,6 +7,7 @@ import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
 import { jsonResponse } from "@/lib/compress";
 import { sanitizePhotos } from "@/lib/photos";
 import { isRateLimited } from "@/lib/rate-limit";
+import { saveUploadedPhoto } from "@/lib/media";
 import type { ToiletKind } from "@/lib/types";
 
 const MAX_PHOTOS = 3;
@@ -62,7 +63,8 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
   if (typeof kind !== "string" || !KINDS.includes(kind as ToiletKind)) {
     return NextResponse.json({ error: "Type invalide" }, { status: 400 });
   }
-  const photoUrls = sanitizePhotos(photos, MAX_PHOTOS);
+  const photoDataUrls = sanitizePhotos(photos, MAX_PHOTOS);
+  const photoUrls = await Promise.all(photoDataUrls.map(saveUploadedPhoto));
 
   const toilet = await prisma.toilet.create({
     data: {
