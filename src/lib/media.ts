@@ -71,19 +71,24 @@ const MIME_TO_EXT: Record<string, string> = {
 
 const DATA_URL_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+=*)$/;
 
+/** Decodes a `data:image/...;base64,...` string into its extension and raw bytes. */
+export function decodeDataUrl(dataUrl: string): { ext: string; bytes: Buffer } {
+  const match = DATA_URL_RE.exec(dataUrl);
+  if (!match) throw new Error("Invalid photo data-URL");
+  const [, mime, base64] = match;
+  return { ext: MIME_TO_EXT[mime], bytes: Buffer.from(base64, "base64") };
+}
+
 /**
  * Decodes a validated `data:image/...;base64,...` URL (already passed
  * through `sanitizePhotos`) and writes it to the local buffer directory,
  * returning the served path to store in `Photo.url` / `CompletionPhoto.url`.
  */
 export async function saveUploadedPhoto(dataUrl: string): Promise<string> {
-  const match = DATA_URL_RE.exec(dataUrl);
-  if (!match) throw new Error("Invalid photo data-URL");
-  const [, mime, base64] = match;
-  const ext = MIME_TO_EXT[mime];
+  const { ext, bytes } = decodeDataUrl(dataUrl);
   const filename = `${crypto.randomUUID()}.${ext}`;
   const dir = localMediaDir();
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, filename), Buffer.from(base64, "base64"));
+  await writeFile(path.join(dir, filename), bytes);
   return `/media/${filename}`;
 }
