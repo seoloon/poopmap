@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -49,6 +49,35 @@ describe("move-local-to-remote", () => {
     await mkdir(localDir, { recursive: true });
     const { runMove } = await import("./move-local-to-remote");
     expect(await runMove()).toEqual({ moved: 0, failed: 0 });
+  });
+
+  it("runMove is a silent no-op when the local dir doesn't exist yet (ENOENT)", async () => {
+    // Point LOCAL_MEDIA_DIR at a path that was never created.
+    process.env.LOCAL_MEDIA_DIR = path.join(localDir, "does-not-exist");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { runMove } = await import("./move-local-to-remote");
+    expect(await runMove()).toEqual({ moved: 0, failed: 0 });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
+  it("runMove logs a warning when readdir fails for a reason other than ENOENT", async () => {
+    // Make LOCAL_MEDIA_DIR point at a file instead of a directory, so
+    // readdir() fails with ENOTDIR — a stand-in for a real misconfiguration
+    // (e.g. a permissions problem) rather than the expected "doesn't exist yet".
+    const notADir = path.join(localDir, "not-a-directory");
+    await writeFile(notADir, "x");
+    process.env.LOCAL_MEDIA_DIR = notADir;
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { runMove } = await import("./move-local-to-remote");
+    expect(await runMove()).toEqual({ moved: 0, failed: 0 });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain("failed to read local media dir");
+
+    warnSpy.mockRestore();
   });
 
   it("runMove counts a failure without aborting the rest of the batch", async () => {

@@ -145,6 +145,12 @@ export async function moderateCompletion(
     await prisma.$transaction(async (tx) => {
       const current = await tx.photo.count({ where: { toiletId: completion.toiletId } });
       if (current === 0) {
+        // NOTE: this copies each CompletionPhoto.url verbatim into a new Photo
+        // row while the original CompletionPhoto row still exists — so two DB
+        // rows now point at the exact same physical file on disk. Any future
+        // file cleanup/garbage-collection for deleted toilets or completions
+        // MUST reference-count (or otherwise check for other referencing rows)
+        // before deleting a file, or it will blank out the still-referenced row.
         await tx.photo.createMany({ data: completion.photos.map((p) => ({ toiletId: completion.toiletId, url: p.url, createdById: completion.userId })) });
         applied.photos = completion.photos.length;
       }

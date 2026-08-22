@@ -37,7 +37,14 @@ export async function runMove(): Promise<{ moved: number; failed: number }> {
   let entries: string[];
   try {
     entries = await readdir(local);
-  } catch {
+  } catch (err) {
+    // ENOENT (directory doesn't exist yet) is the expected "nothing uploaded
+    // yet" case and stays silent. Anything else — e.g. a permissions problem
+    // on the mounted volume — must not look identical to "nothing to do",
+    // especially now that this runs automatically at every process boot.
+    if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+      console.warn(`[move-local-to-remote] failed to read local media dir ${local}:`, err);
+    }
     return { moved: 0, failed: 0 };
   }
 
