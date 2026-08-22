@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import type { FlyTarget } from "@/components/Map";
 import Toasts, { toast } from "@/components/Toasts";
+import BottomNav, { type NavTab } from "@/components/BottomNav";
 import type { SessionUser, ToiletPin } from "@/lib/types";
 
 const PoopMap = dynamic(() => import("@/components/Map"), {
@@ -23,6 +24,7 @@ const AuthModal = dynamic(() => import("@/components/AuthModal"), { ssr: false }
 // Only ever rendered for a logged-in user (returns null otherwise), so it's just as
 // interaction-gated as the modals above from an anonymous visitor's point of view.
 const NotificationBell = dynamic(() => import("@/components/NotificationBell"), { ssr: false });
+const ProfilePage = dynamic(() => import("@/components/ProfilePage"), { ssr: false });
 
 const CACHE_KEY = "poopmap_cache_v1";
 
@@ -58,6 +60,7 @@ function Home() {
   const [draftPos, setDraftPos] = useState<{ lat: number; lng: number } | null>(null);
   const [flyTarget, setFlyTarget] = useState<FlyTarget>(null);
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [view, setView] = useState<NavTab>("map");
   const versionRef = useRef(-1);
 
   /** Cheap sync: sends the last known version, server replies 304 if nothing changed. */
@@ -110,6 +113,7 @@ function Home() {
       void import("@/components/AddToiletModal");
       void import("@/components/AuthModal");
       void import("@/components/NotificationBell");
+      void import("@/components/ProfilePage");
     });
     return () => cancelIdle(id as never);
   }, []);
@@ -251,7 +255,9 @@ function Home() {
         line-height and font metrics vary across OS/browsers — a hardcoded top offset for
         the chips row broke as soon as the header was taller than assumed).
       */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-[1000] flex flex-col gap-2 p-3">
+      <header
+        className={`pointer-events-none absolute inset-x-0 top-0 z-[1000] flex-col gap-2 p-3 ${view === "map" ? "flex" : "hidden"}`}
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="sticker-sm pointer-events-auto flex items-center gap-2.5 rounded-2xl px-3.5 py-2">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-ink bg-signage text-lg leading-none shadow-[2px_2px_0_#1a1a1a]">
@@ -268,30 +274,6 @@ function Home() {
 
           <div className="pointer-events-auto flex items-center gap-2">
             <NotificationBell me={me} />
-            {(me?.role === "admin" || me?.role === "moderator") && (
-              <a href="/admin" className="sticker-sm rounded-xl px-3 py-2 text-sm font-extrabold transition hover:-translate-y-0.5 hover:bg-blush">
-                🛠️ Admin
-              </a>
-            )}
-            {me ? (
-              <div className="sticker-sm flex items-center gap-1 rounded-xl px-2 py-1.5">
-                <span className="px-1.5 text-sm font-extrabold">{me.pseudo}</span>
-                <button
-                  onClick={logout}
-                  className="rounded-lg border-2 border-ink bg-white px-2 py-1 text-xs font-extrabold transition hover:bg-red-50"
-                  title="Déconnexion"
-                >
-                  Sortir
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAuth(true)}
-                className="sticker-sm rounded-xl bg-signage px-3.5 py-2 text-sm font-extrabold transition hover:-translate-y-0.5"
-              >
-                Connexion
-              </button>
-            )}
           </div>
         </div>
 
@@ -322,37 +304,54 @@ function Home() {
         )}
       </header>
 
-      <div className="absolute bottom-5 right-4 z-[950] flex flex-col items-end gap-2.5 md:bottom-8">
-        <button
-          onClick={() =>
-            geolocate((pos) => {
-              setUserPos(pos);
-              setFlyTarget({ ...pos, zoom: 16, ts: Date.now() });
-            })
-          }
-          className="sticker sticker-press grid h-12 w-12 place-items-center rounded-full text-xl transition hover:-translate-y-1"
-          title="Me localiser"
-          aria-label="Me localiser"
-        >
-          📍
-        </button>
-        <button
-          onClick={() => {
-            setDraftPos(null);
-            setShowAdd(true);
-          }}
-          className="sticker sticker-press group flex items-center gap-2 rounded-full bg-signage py-2.5 pl-3 pr-4 transition hover:-translate-y-1"
-        >
-          <span className="grid h-8 w-8 place-items-center rounded-full border-2 border-ink bg-white font-display text-xl font-extrabold transition group-hover:rotate-90">
-            +
-          </span>
-          <span className="font-display text-base font-extrabold leading-none">Un petit coin</span>
-        </button>
-      </div>
+      {view === "map" && (
+        <div className="absolute bottom-24 right-4 z-[950]">
+          <button
+            onClick={() =>
+              geolocate((pos) => {
+                setUserPos(pos);
+                setFlyTarget({ ...pos, zoom: 16, ts: Date.now() });
+              })
+            }
+            className="sticker sticker-press grid h-12 w-12 place-items-center rounded-full text-xl transition hover:-translate-y-1"
+            title="Me localiser"
+            aria-label="Me localiser"
+          >
+            📍
+          </button>
+        </div>
+      )}
 
-      <p className="absolute bottom-1.5 left-2 z-[900] rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold text-ink/60">
-        © les contributeurs d&apos;OpenStreetMap France
-      </p>
+      {view === "map" && (
+        <p className="absolute bottom-1.5 left-2 z-[900] rounded bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold text-ink/60">
+          © les contributeurs d&apos;OpenStreetMap France
+        </p>
+      )}
+
+      <AnimatePresence>
+        {view === "profile" && (
+          <ProfilePage
+            me={me}
+            onLoginClick={() => setShowAuth(true)}
+            onLogout={() => void logout()}
+            onSelectToilet={(id) => {
+              setView("map");
+              setSelectedId(id);
+              const t = toilets.find((x) => x.id === id);
+              if (t) setFlyTarget({ lat: t.lat, lng: t.lng, zoom: 17, ts: Date.now() });
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <BottomNav
+        active={view}
+        onNavigate={setView}
+        onAdd={() => {
+          setDraftPos(null);
+          setShowAdd(true);
+        }}
+      />
 
       <AnimatePresence>
         {selected && (

@@ -191,7 +191,7 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: 40, opacity: 0 }}
       transition={{ duration: 0.32, ease: [0.22, 1.2, 0.36, 1] }}
-      className="sticker fixed inset-x-0 bottom-0 z-[1001] flex max-h-[80dvh] flex-col rounded-b-none md:inset-x-auto md:bottom-4 md:right-4 md:top-20 md:max-h-none md:w-[400px] md:rounded-[24px]"
+      className="sticker fixed inset-x-0 bottom-0 z-[1101] flex max-h-[80dvh] flex-col rounded-b-none md:inset-x-auto md:bottom-4 md:right-4 md:top-20 md:max-h-none md:w-[400px] md:rounded-[24px]"
     >
       {/* Mobile drag handle */}
       <div className="flex justify-center pt-2 md:hidden">

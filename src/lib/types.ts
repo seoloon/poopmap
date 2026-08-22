@@ -138,6 +138,29 @@ export type AppNotification = {
   createdAt: string;
 };
 
+export type ActivityKind = "added" | "review" | "completion";
+
+/** One toilet the user has some history with, for the "Mon activité" list on the profile page. */
+export type ProfileActivityToilet = {
+  id: number;
+  name: string | null;
+  kind: ToiletKind;
+  status: ToiletStatus;
+  activity: ActivityKind[];
+  lastActivityAt: string;
+};
+
+/** Payload for `GET /api/profile` — everything the profile page needs, fetched once. */
+export type ProfileData = {
+  pseudo: string;
+  username: string;
+  createdAt: string;
+  toiletsAdded: number;
+  completions: number;
+  reviews: number;
+  activity: ProfileActivityToilet[];
+};
+
 export type ReportCategory = "closed" | "not_existing" | "wrong_info" | "inappropriate" | "unsafe" | "other";
 
 /** Shared between the report modal (client) and the submit route (server-side validation). */
