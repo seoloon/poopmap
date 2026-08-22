@@ -16,6 +16,7 @@ import type {
 } from "@/lib/types";
 import { REPORT_CATEGORIES } from "@/lib/types";
 import { toast } from "./Toasts";
+import UserProfileModal from "./UserProfileModal";
 
 type Data = {
   pending: ToiletDetail[];
@@ -52,6 +53,7 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
   const [tab, setTab] = useState<Tab>("queue");
   const [resetFor, setResetFor] = useState<number | null>(null);
   const [newPw, setNewPw] = useState("");
+  const [viewedUserId, setViewedUserId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin", { cache: "no-store" });
@@ -204,11 +206,11 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
             ))}
           </div>
         ) : tab === "queue" ? (
-          <QueueTab pending={data.pending} act={act} partial={partial} del={del} />
+          <QueueTab pending={data.pending} act={act} partial={partial} del={del} onSelectUser={setViewedUserId} />
         ) : tab === "avis" ? (
-          <AvisTab reviews={data.reviews} partial={partial} />
+          <AvisTab reviews={data.reviews} partial={partial} onSelectUser={setViewedUserId} />
         ) : tab === "completions" ? (
-          <CompletionsTab completions={data.completions} moderation={data.moderation} partial={partial} act={act} del={del} />
+          <CompletionsTab completions={data.completions} moderation={data.moderation} partial={partial} act={act} del={del} onSelectUser={setViewedUserId} />
         ) : tab === "reports" ? (
           <ReportsTab groups={data.reports} onResolve={resolveReport} />
         ) : (
@@ -222,7 +224,9 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
                     </span>
                     <div className="min-w-0">
                       <p className="font-display text-base font-extrabold leading-tight">
-                        {u.pseudo}
+                        <button onClick={() => setViewedUserId(u.id)} className="underline decoration-dotted underline-offset-2">
+                          {u.pseudo}
+                        </button>
                         {u.id === me.id && <span className="ml-1.5 text-[10px] font-bold text-ink/50">(toi)</span>}
                       </p>
                       <p className="truncate font-mono text-[11px] font-bold text-ink/60">{u.username}</p>
@@ -319,6 +323,8 @@ export default function AdminPanel({ me }: { me: SessionUser }) {
           </ul>
         )}
       </main>
+
+      {viewedUserId !== null && <UserProfileModal userId={viewedUserId} onClose={() => setViewedUserId(null)} />}
     </div>
   );
 }
@@ -394,7 +400,19 @@ function DeleteToiletButton({ toiletId, toiletName, del }: { toiletId: number; t
   );
 }
 
-function QueueTab({ pending, act, partial, del }: { pending: ToiletDetail[]; act: ActFn; partial: PartialFn; del: DelFn }) {
+function QueueTab({
+  pending,
+  act,
+  partial,
+  del,
+  onSelectUser,
+}: {
+  pending: ToiletDetail[];
+  act: ActFn;
+  partial: PartialFn;
+  del: DelFn;
+  onSelectUser: (id: number) => void;
+}) {
   if (pending.length === 0) {
     return (
       <div className="sticker px-6 py-10 text-center">
@@ -407,13 +425,25 @@ function QueueTab({ pending, act, partial, del }: { pending: ToiletDetail[]; act
   return (
     <ul className="space-y-3">
       {pending.map((t) => (
-        <PendingToiletCard key={t.id} t={t} act={act} partial={partial} del={del} />
+        <PendingToiletCard key={t.id} t={t} act={act} partial={partial} del={del} onSelectUser={onSelectUser} />
       ))}
     </ul>
   );
 }
 
-function PendingToiletCard({ t, act, partial, del }: { t: ToiletDetail; act: ActFn; partial: PartialFn; del: DelFn }) {
+function PendingToiletCard({
+  t,
+  act,
+  partial,
+  del,
+  onSelectUser,
+}: {
+  t: ToiletDetail;
+  act: ActFn;
+  partial: PartialFn;
+  del: DelFn;
+  onSelectUser: (id: number) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(t.name ?? "");
   const [address, setAddress] = useState(t.address ?? "");
@@ -436,7 +466,15 @@ function PendingToiletCard({ t, act, partial, del }: { t: ToiletDetail; act: Act
         <div>
           <p className="font-display text-lg font-extrabold leading-tight">{t.name}</p>
           <p className="text-xs font-bold text-ink/60">
-            {t.kind} · proposé par {t.createdByPseudo} · {fmtDate(t.createdAt)}
+            {t.kind} · proposé par{" "}
+            {t.createdById !== null ? (
+              <button onClick={() => onSelectUser(t.createdById!)} className="underline decoration-dotted underline-offset-2">
+                {t.createdByPseudo}
+              </button>
+            ) : (
+              t.createdByPseudo
+            )}{" "}
+            · {fmtDate(t.createdAt)}
           </p>
           {t.address && <p className="mt-0.5 text-xs font-bold text-ink/60">📍 {t.address}</p>}
           {t.description && <p className="mt-1 text-sm font-semibold italic text-ink/80">&ldquo;{t.description}&rdquo;</p>}
@@ -516,7 +554,7 @@ function PendingToiletCard({ t, act, partial, del }: { t: ToiletDetail; act: Act
   );
 }
 
-function AvisTab({ reviews, partial }: { reviews: AdminReviewRow[]; partial: PartialFn }) {
+function AvisTab({ reviews, partial, onSelectUser }: { reviews: AdminReviewRow[]; partial: PartialFn; onSelectUser: (id: number) => void }) {
   if (reviews.length === 0) {
     return (
       <div className="sticker px-6 py-10 text-center">
@@ -528,13 +566,13 @@ function AvisTab({ reviews, partial }: { reviews: AdminReviewRow[]; partial: Par
   return (
     <ul className="space-y-3">
       {reviews.map((r) => (
-        <ReviewCard key={r.id} r={r} partial={partial} />
+        <ReviewCard key={r.id} r={r} partial={partial} onSelectUser={onSelectUser} />
       ))}
     </ul>
   );
 }
 
-function ReviewCard({ r, partial }: { r: AdminReviewRow; partial: PartialFn }) {
+function ReviewCard({ r, partial, onSelectUser }: { r: AdminReviewRow; partial: PartialFn; onSelectUser: (id: number) => void }) {
   const [editing, setEditing] = useState(false);
   const [comment, setComment] = useState(r.comment ?? "");
 
@@ -543,7 +581,14 @@ function ReviewCard({ r, partial }: { r: AdminReviewRow; partial: PartialFn }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-extrabold">
-            {r.pseudo} <span className="font-normal text-ink/50">· {fmtDate(r.createdAt)}</span>
+            {r.userId !== null ? (
+              <button onClick={() => onSelectUser(r.userId!)} className="underline decoration-dotted underline-offset-2">
+                {r.pseudo}
+              </button>
+            ) : (
+              r.pseudo
+            )}{" "}
+            <span className="font-normal text-ink/50">· {fmtDate(r.createdAt)}</span>
           </p>
           <p className="text-[11px] font-bold text-ink/60">
             🧼{r.proprete} 🛋️{r.confort} ✨{r.experience} · sur {r.toiletName ?? "toilette sans nom"}
@@ -592,12 +637,14 @@ function CompletionsTab({
   partial,
   act,
   del,
+  onSelectUser,
 }: {
   completions: AdminCompletion[];
   moderation: AdminModeratableToilet[];
   partial: PartialFn;
   act: ActFn;
   del: DelFn;
+  onSelectUser: (id: number) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -610,7 +657,7 @@ function CompletionsTab({
       ) : (
         <ul className="space-y-3">
           {completions.map((c) => (
-            <CompletionCard key={c.id} c={c} partial={partial} />
+            <CompletionCard key={c.id} c={c} partial={partial} onSelectUser={onSelectUser} />
           ))}
         </ul>
       )}
@@ -675,7 +722,7 @@ function CompletionsTab({
   );
 }
 
-function CompletionCard({ c, partial }: { c: AdminCompletion; partial: PartialFn }) {
+function CompletionCard({ c, partial, onSelectUser }: { c: AdminCompletion; partial: PartialFn; onSelectUser: (id: number) => void }) {
   const [name, setName] = useState(c.name ?? "");
   const [address, setAddress] = useState(c.address ?? "");
   const [comment, setComment] = useState(c.comment ?? "");
@@ -698,7 +745,10 @@ function CompletionCard({ c, partial }: { c: AdminCompletion; partial: PartialFn
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-bold text-ink/60">
-            {c.userPseudo} propose de compléter {c.toiletName ?? "toilette sans nom"} · {fmtDate(c.createdAt)}
+            <button onClick={() => onSelectUser(c.userId)} className="underline decoration-dotted underline-offset-2">
+              {c.userPseudo}
+            </button>{" "}
+            propose de compléter {c.toiletName ?? "toilette sans nom"} · {fmtDate(c.createdAt)}
           </p>
         </div>
         <span

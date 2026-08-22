@@ -53,9 +53,10 @@ type Props = {
   onClose: () => void;
   onPosted: () => void;
   onLoginClick: () => void;
+  onSelectUser: (userId: number) => void;
 };
 
-export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }: Props) {
+export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick, onSelectUser }: Props) {
   const [detail, setDetail] = useState<ToiletDetail | null>(null);
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -420,7 +421,15 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
         )}
         {detail ? (
           <p className="text-[11px] font-bold text-ink/50">
-            Référencé par <span className="text-ink/80">{detail.createdByPseudo}</span> · {relDate(detail.createdAt)}
+            Référencé par{" "}
+            {detail.createdById !== null ? (
+              <button onClick={() => onSelectUser(detail.createdById!)} className="text-ink/80 underline decoration-dotted underline-offset-2">
+                {detail.createdByPseudo}
+              </button>
+            ) : (
+              <span className="text-ink/80">{detail.createdByPseudo}</span>
+            )}{" "}
+            · {relDate(detail.createdAt)}
           </p>
         ) : (
           <div className="h-3 w-32 animate-pulse rounded bg-ink/10" />
@@ -451,7 +460,13 @@ export default function DetailPanel({ pin, me, onClose, onPosted, onLoginClick }
                       >
                         {r.pseudo[0]?.toUpperCase()}
                       </span>
-                      <span className="text-sm font-extrabold">{r.pseudo}</span>
+                      {r.userId !== null ? (
+                        <button onClick={() => onSelectUser(r.userId!)} className="text-sm font-extrabold underline decoration-dotted underline-offset-2">
+                          {r.pseudo}
+                        </button>
+                      ) : (
+                        <span className="text-sm font-extrabold">{r.pseudo}</span>
+                      )}
                       {r.mine && <span className="rounded-full bg-blush px-1.5 text-[10px] font-extrabold">toi</span>}
                       <span className="ml-auto text-[10px] font-bold text-ink/50">{relDate(r.createdAt)}</span>
                     </div>

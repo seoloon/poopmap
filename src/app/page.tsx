@@ -25,6 +25,7 @@ const AuthModal = dynamic(() => import("@/components/AuthModal"), { ssr: false }
 // interaction-gated as the modals above from an anonymous visitor's point of view.
 const NotificationBell = dynamic(() => import("@/components/NotificationBell"), { ssr: false });
 const ProfilePage = dynamic(() => import("@/components/ProfilePage"), { ssr: false });
+const UserProfileModal = dynamic(() => import("@/components/UserProfileModal"), { ssr: false });
 
 const CACHE_KEY = "cacarte_cache_v1";
 
@@ -53,6 +54,7 @@ function Home() {
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState<SessionUser | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [viewedUserId, setViewedUserId] = useState<number | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [showAuth, setShowAuth] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -114,6 +116,7 @@ function Home() {
       void import("@/components/AuthModal");
       void import("@/components/NotificationBell");
       void import("@/components/ProfilePage");
+      void import("@/components/UserProfileModal");
     });
     return () => cancelIdle(id as never);
   }, []);
@@ -363,6 +366,23 @@ function Home() {
             onClose={() => setSelectedId(null)}
             onPosted={() => void sync()}
             onLoginClick={() => setShowAuth(true)}
+            onSelectUser={setViewedUserId}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {viewedUserId !== null && (
+          <UserProfileModal
+            key={viewedUserId}
+            userId={viewedUserId}
+            onClose={() => setViewedUserId(null)}
+            onSelectToilet={(id) => {
+              setViewedUserId(null);
+              setSelectedId(id);
+              const t = toilets.find((x) => x.id === id);
+              if (t) setFlyTarget({ lat: t.lat, lng: t.lng, zoom: 17, ts: Date.now() });
+            }}
           />
         )}
       </AnimatePresence>

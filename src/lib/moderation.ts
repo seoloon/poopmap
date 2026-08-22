@@ -20,6 +20,7 @@ export async function listReviewsForAdmin(): Promise<AdminReviewRow[]> {
     id: r.id,
     toiletId: r.toilet.id,
     toiletName: r.toilet.name,
+    userId: r.userId,
     pseudo: r.pseudo,
     proprete: r.proprete,
     confort: r.confort,
@@ -37,7 +38,7 @@ export async function listCompletionsForAdmin(): Promise<AdminCompletion[]> {
     take: 200,
     include: {
       toilet: { select: { id: true, name: true } },
-      user: { select: { pseudo: true } },
+      user: { select: { id: true, pseudo: true } },
       photos: { select: { id: true, url: true }, orderBy: { id: "asc" } },
     },
   });
@@ -45,6 +46,7 @@ export async function listCompletionsForAdmin(): Promise<AdminCompletion[]> {
     id: c.id,
     toiletId: c.toilet.id,
     toiletName: c.toilet.name,
+    userId: c.user.id,
     userPseudo: c.user.pseudo,
     name: c.name,
     address: c.address,

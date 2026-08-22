@@ -23,6 +23,7 @@ export const GET = withApiErrorHandling(async (_req: NextRequest, { params }: { 
   return NextResponse.json({
     reviews: rows.map((r) => ({
       id: r.id,
+      userId: r.userId,
       pseudo: r.pseudo,
       proprete: r.proprete,
       confort: r.confort,

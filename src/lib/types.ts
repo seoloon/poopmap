@@ -41,6 +41,8 @@ export type ToiletDetail = ToiletPin & {
 
 export type Review = {
   id: number;
+  /** Null for anonymous/legacy reviews predating account-linking — not clickable. */
+  userId: number | null;
   pseudo: string;
   proprete: number;
   confort: number;
@@ -99,6 +101,7 @@ export type AdminReviewRow = {
   id: number;
   toiletId: number;
   toiletName: string | null;
+  userId: number | null;
   pseudo: string;
   proprete: number;
   confort: number;
@@ -113,6 +116,7 @@ export type AdminCompletion = {
   id: number;
   toiletId: number;
   toiletName: string | null;
+  userId: number;
   userPseudo: string;
   name: string | null;
   address: string | null;
@@ -154,6 +158,17 @@ export type ProfileActivityToilet = {
 export type ProfileData = {
   pseudo: string;
   username: string;
+  createdAt: string;
+  toiletsAdded: number;
+  completions: number;
+  reviews: number;
+  activity: ProfileActivityToilet[];
+};
+
+/** Payload for `GET /api/users/[id]` — the read-only profile shown when clicking a pseudo. */
+export type PublicProfileData = {
+  id: number;
+  pseudo: string;
   createdAt: string;
   toiletsAdded: number;
   completions: number;
