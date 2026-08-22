@@ -54,6 +54,12 @@ describe("migrate-existing-photos", () => {
     expect(result.migrated).toBe(1);
     expect(result.failed).toBe(0);
 
+    // Confirm the real query filter is actually sent to Prisma, not just that
+    // the mock happened to return something — a regression that broke or
+    // dropped the `startsWith: "data:image/"` filter would still pass this
+    // test if we only asserted on the return value / update calls.
+    expect(photoFindMany.mock.calls[0][0].where).toEqual({ url: { startsWith: "data:image/" } });
+
     const [{ where, data }] = photoUpdate.mock.calls[0];
     expect(where).toEqual({ id: 1 });
     expect(data.url).toMatch(/^\/media\/[a-f0-9-]{36}\.png$/);
@@ -72,5 +78,33 @@ describe("migrate-existing-photos", () => {
     const { migratePhotos } = await import("./migrate-existing-photos");
     const result = await migratePhotos();
     expect(result).toEqual({ migrated: 0, failed: 0 });
+    expect(photoFindMany.mock.calls[0][0].where).toEqual({ url: { startsWith: "data:image/" } });
+  });
+
+  it("excludes a permanently-failing row from later queries so the batch loop terminates", async () => {
+    // Unsupported mime type ("gif") means decodeDataUrl's regex never matches,
+    // so this row throws every time it's decoded — reproducing the original
+    // hang, where the same failing row would be re-fetched forever because
+    // its url still started with "data:image/" and its row was never updated.
+    const UNDECODABLE_URL = "data:image/gif;base64,AAAA";
+    photoFindMany
+      .mockResolvedValueOnce([{ id: 2, url: UNDECODABLE_URL }])
+      .mockResolvedValueOnce([]);
+
+    const { migratePhotos } = await import("./migrate-existing-photos");
+    const result = await migratePhotos();
+
+    expect(result.migrated).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(photoUpdate).not.toHaveBeenCalled();
+
+    // The loop must have made a second call (to discover there's nothing
+    // left) and that second call must exclude the id that just failed —
+    // otherwise it would be fetched again forever.
+    expect(photoFindMany).toHaveBeenCalledTimes(2);
+    expect(photoFindMany.mock.calls[1][0].where).toEqual({
+      url: { startsWith: "data:image/" },
+      id: { notIn: [2] },
+    });
   });
 });

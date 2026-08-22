@@ -7,8 +7,13 @@ import { decodeDataUrl, remoteMediaDir } from "../src/lib/media";
 
 const BATCH_SIZE = 200;
 
+type FindManyArgs = {
+  where: { url: { startsWith: string }; id?: { notIn: number[] } };
+  take: number;
+};
+
 async function migrateTable(
-  findMany: (args: { where: { url: { startsWith: string } }; take: number }) => Promise<{ id: number; url: string }[]>,
+  findMany: (args: FindManyArgs) => Promise<{ id: number; url: string }[]>,
   update: (args: { where: { id: number }; data: { url: string } }) => Promise<unknown>
 ): Promise<{ migrated: number; failed: number }> {
   const dir = remoteMediaDir();
@@ -16,8 +21,16 @@ async function migrateTable(
 
   let migrated = 0;
   let failed = 0;
+  // Ids that failed to migrate in this run. Excluded from subsequent queries
+  // so a permanently-failing row (e.g. malformed base64) doesn't get fetched
+  // forever — since its `url` never changes, it would otherwise match the
+  // `startsWith: "data:image/"` filter on every iteration and the loop would
+  // never reach `rows.length === 0`.
+  const failedIds = new Set<number>();
   for (;;) {
-    const rows = await findMany({ where: { url: { startsWith: "data:image/" } }, take: BATCH_SIZE });
+    const where: FindManyArgs["where"] = { url: { startsWith: "data:image/" } };
+    if (failedIds.size > 0) where.id = { notIn: [...failedIds] };
+    const rows = await findMany({ where, take: BATCH_SIZE });
     if (rows.length === 0) break;
 
     for (const row of rows) {
@@ -29,6 +42,7 @@ async function migrateTable(
         migrated += 1;
       } catch (err) {
         failed += 1;
+        failedIds.add(row.id);
         console.warn(`[migrate-existing-photos] failed to migrate photo ${row.id}:`, err);
       }
     }
