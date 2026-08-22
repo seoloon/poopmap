@@ -58,7 +58,7 @@ out tags;`;
   console.log("🌍 Fetching OSM toilets that carry an image/wikimedia_commons tag…");
   const res = await fetch(OVERPASS_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "PoopMap-enrich/1.0" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Cacarte-enrich/1.0"},
     body: `data=${encodeURIComponent(query)}`,
     signal: AbortSignal.timeout(110_000),
   });

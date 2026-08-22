@@ -183,7 +183,7 @@ function Basemap() {
  * callback references (see `onMarkerSelect`/`onMapPlace` in page.tsx) and a memoized
  * `toilets` array.
  */
-function PoopMap({ toilets, selectedId, placing, userPos, flyTarget, onSelect, onPlace }: Props) {
+function CacarteMap({ toilets, selectedId, placing, userPos, flyTarget, onSelect, onPlace }: Props) {
   const baseIcons = useBaseIcons(toilets);
   const selectedToilet = selectedId !== null ? toilets.find((t) => t.id === selectedId) : undefined;
   const selectedIcon = useMemo(() => (selectedToilet ? makeIcon(selectedToilet, true) : null), [selectedToilet]);
@@ -248,4 +248,4 @@ function PoopMap({ toilets, selectedId, placing, userPos, flyTarget, onSelect, o
   );
 }
 
-export default memo(PoopMap);
+export default memo(CacarteMap);

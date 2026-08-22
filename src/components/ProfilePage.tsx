@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { ActivityKind, ProfileData, SessionUser } from "@/lib/types";
+import { toast } from "./Toasts";
 
 const KIND_BADGE: Record<string, { txt: string; cls: string }> = {
   gratuit: { txt: "🆓 Gratuit", cls: "bg-sage-dark/20 text-sage-dark" },
@@ -32,11 +33,15 @@ type Props = {
   onLoginClick: () => void;
   onLogout: () => void;
   onSelectToilet: (id: number) => void;
+  onPseudoChanged: (pseudo: string) => void;
 };
 
-export default function ProfilePage({ me, onLoginClick, onLogout, onSelectToilet }: Props) {
+export default function ProfilePage({ me, onLoginClick, onLogout, onSelectToilet, onPseudoChanged }: Props) {
   const [data, setData] = useState<ProfileData | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [editingPseudo, setEditingPseudo] = useState(false);
+  const [pseudoDraft, setPseudoDraft] = useState("");
+  const [savingPseudo, setSavingPseudo] = useState(false);
 
   useEffect(() => {
     if (!me) return;
@@ -49,6 +54,39 @@ export default function ProfilePage({ me, onLoginClick, onLogout, onSelectToilet
       })
       .catch(() => setLoaded(true));
   }, [me]);
+
+  const startEditingPseudo = () => {
+    setPseudoDraft(me?.pseudo ?? "");
+    setEditingPseudo(true);
+  };
+
+  const savePseudo = async () => {
+    const trimmed = pseudoDraft.trim();
+    if (trimmed.length < 2 || trimmed.length > 24) {
+      toast("Le pseudo doit faire entre 2 et 24 caractères", "err");
+      return;
+    }
+    setSavingPseudo(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pseudo: trimmed }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast(body.error ?? "Impossible de changer le pseudo", "err");
+        return;
+      }
+      onPseudoChanged(body.pseudo);
+      setEditingPseudo(false);
+      toast("Pseudo mis à jour 🎉");
+    } catch {
+      toast("Impossible de changer le pseudo — réessaie", "err");
+    } finally {
+      setSavingPseudo(false);
+    }
+  };
 
   return (
     <motion.div
@@ -84,13 +122,49 @@ export default function ProfilePage({ me, onLoginClick, onLogout, onSelectToilet
           <>
             <div className="sticker mb-4 space-y-4 rounded-[24px] p-5">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-display text-xl font-extrabold leading-tight">{me.pseudo}</p>
-                  <p className="text-xs font-bold text-ink/50">@{me.username}</p>
-                </div>
+                {editingPseudo ? (
+                  <div className="flex flex-1 items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={pseudoDraft}
+                      onChange={(e) => setPseudoDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void savePseudo();
+                        if (e.key === "Escape") setEditingPseudo(false);
+                      }}
+                      maxLength={24}
+                      disabled={savingPseudo}
+                      className="min-w-0 flex-1 rounded-lg border-2 border-ink px-2 py-1 font-display text-lg font-extrabold"
+                    />
+                    <button
+                      onClick={() => void savePseudo()}
+                      disabled={savingPseudo}
+                      className="rounded-lg border-2 border-ink bg-signage px-2 py-1.5 text-xs font-extrabold transition hover:-translate-y-0.5 disabled:opacity-50"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => setEditingPseudo(false)}
+                      disabled={savingPseudo}
+                      className="rounded-lg border-2 border-ink bg-white px-2 py-1.5 text-xs font-extrabold transition hover:bg-red-50 disabled:opacity-50"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="min-w-0">
+                    <button onClick={startEditingPseudo} className="group flex items-center gap-1.5">
+                      <p className="truncate font-display text-xl font-extrabold leading-tight">{me.pseudo}</p>
+                      <span className="text-sm text-ink/40 transition group-hover:text-ink/70" aria-hidden>
+                        ✏️
+                      </span>
+                    </button>
+                    <p className="text-xs font-bold text-ink/50">@{me.username}</p>
+                  </div>
+                )}
                 <button
                   onClick={onLogout}
-                  className="rounded-lg border-2 border-ink bg-white px-2.5 py-1.5 text-xs font-extrabold transition hover:bg-red-50"
+                  className="shrink-0 rounded-lg border-2 border-ink bg-white px-2.5 py-1.5 text-xs font-extrabold transition hover:bg-red-50"
                 >
                   Sortir
                 </button>

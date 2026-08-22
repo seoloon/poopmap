@@ -90,7 +90,7 @@ out center;`;
   const res = await fetch(OVERPASS_URL, {
     method: "POST",
     // Overpass rejects requests with no identifying User-Agent (406 Not Acceptable).
-    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "PoopMap-seed/1.0" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Cacarte-seed/1.0"},
     body: `data=${encodeURIComponent(query)}`,
     signal: AbortSignal.timeout(290_000),
   });

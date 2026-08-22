@@ -58,7 +58,7 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
   }
   const [south, west, north, east] = FRANCE_BBOX;
   if (lat < south || lat > north || lng < west || lng > east) {
-    return NextResponse.json({ error: "PoopMap ne référence que la France métropolitaine" }, { status: 400 });
+    return NextResponse.json({ error: "Caca'rte ne référence que la France métropolitaine" }, { status: 400 });
   }
   if (typeof kind !== "string" || !KINDS.includes(kind as ToiletKind)) {
     return NextResponse.json({ error: "Type invalide" }, { status: 400 });

@@ -18,7 +18,7 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "PoopMap 💩 — Trouve le trône le plus proche",
+  title: "Caca'rte 💩 — Trouve le trône le plus proche",
   description:
     "La carte collaborative des toilettes publiques en France : trouve, référence et note les petits coins près de toi.",
   icons: {

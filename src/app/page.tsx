@@ -9,7 +9,7 @@ import Toasts, { toast } from "@/components/Toasts";
 import BottomNav, { type NavTab } from "@/components/BottomNav";
 import type { SessionUser, ToiletPin } from "@/lib/types";
 
-const PoopMap = dynamic(() => import("@/components/Map"), {
+const CacarteMap = dynamic(() => import("@/components/Map"), {
   ssr: false,
   loading: () => <Splash />,
 });
@@ -26,7 +26,7 @@ const AuthModal = dynamic(() => import("@/components/AuthModal"), { ssr: false }
 const NotificationBell = dynamic(() => import("@/components/NotificationBell"), { ssr: false });
 const ProfilePage = dynamic(() => import("@/components/ProfilePage"), { ssr: false });
 
-const CACHE_KEY = "poopmap_cache_v1";
+const CACHE_KEY = "cacarte_cache_v1";
 
 function Splash() {
   return (
@@ -238,7 +238,7 @@ function Home() {
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-cream">
       <div className="absolute inset-0 z-0">
-        <PoopMap
+        <CacarteMap
           toilets={visible}
           selectedId={selectedId}
           placing={placing}
@@ -264,7 +264,7 @@ function Home() {
               💩
             </span>
             <div className="leading-none">
-              <p className="font-display text-xl font-extrabold tracking-tight">PoopMap</p>
+              <p className="font-display text-xl font-extrabold tracking-tight">Caca&apos;rte</p>
               <p className="text-[10px] font-bold text-ink/60">la carte qui a du nez</p>
             </div>
             <span className="ml-1 hidden shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-blush px-2.5 py-1 text-[11px] font-extrabold leading-none sm:inline-flex">
@@ -334,6 +334,7 @@ function Home() {
             me={me}
             onLoginClick={() => setShowAuth(true)}
             onLogout={() => void logout()}
+            onPseudoChanged={(pseudo) => setMe((u) => (u ? { ...u, pseudo } : u))}
             onSelectToilet={(id) => {
               setView("map");
               setSelectedId(id);
