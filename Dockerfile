@@ -42,6 +42,12 @@ COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 EXPOSE 3000
 
+# Dokploy must mount two volumes for photo storage to work:
+#   1. A persistent volume at LOCAL_MEDIA_DIR's path — without persistence, a
+#      redeploy between weekly runs would delete not-yet-migrated photos.
+#   2. A bind mount exposing the VPS's existing remote-disk mount point (the
+#      4TB SSHFS/NFS/rclone mount) at REMOTE_MEDIA_DIR's path.
+
 # Push the schema, seed OSM toilets (idempotent), enrich with any newly-tagged OSM
 # photos (idempotent, runs every start — best-effort, never blocks startup), then
 # start the server.
