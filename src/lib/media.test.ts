@@ -79,3 +79,45 @@ describe("media path helpers", () => {
     expect(found?.path).toBe(path.join(localDir, "44444444-4444-4444-4444-444444444444.jpg"));
   });
 });
+
+describe("saveUploadedPhoto", () => {
+  let localDir: string;
+
+  beforeEach(async () => {
+    localDir = await mkdtemp(path.join(tmpdir(), "media-local-"));
+    process.env.LOCAL_MEDIA_DIR = localDir;
+  });
+
+  afterEach(async () => {
+    await rm(localDir, { recursive: true, force: true });
+    delete process.env.LOCAL_MEDIA_DIR;
+  });
+
+  // 1x1 red pixel PNG.
+  const TINY_PNG =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+  it("writes the decoded bytes and returns a served path", async () => {
+    const { saveUploadedPhoto } = await import("./media");
+    const url = await saveUploadedPhoto(TINY_PNG);
+    expect(url).toMatch(/^\/media\/[a-f0-9-]{36}\.png$/);
+
+    const { readFile } = await import("node:fs/promises");
+    const filename = url.split("/").pop()!;
+    const bytes = await readFile(path.join(localDir, filename));
+    const expectedBytes = Buffer.from(TINY_PNG.split(",")[1], "base64");
+    expect(bytes.equals(expectedBytes)).toBe(true);
+  });
+
+  it("rejects a string that isn't a data-URL", async () => {
+    const { saveUploadedPhoto } = await import("./media");
+    await expect(saveUploadedPhoto("not-a-data-url")).rejects.toThrow(/Invalid photo data-URL/);
+  });
+
+  it("creates the local directory if it doesn't exist yet", async () => {
+    await rm(localDir, { recursive: true, force: true });
+    const { saveUploadedPhoto } = await import("./media");
+    const url = await saveUploadedPhoto(TINY_PNG);
+    expect(url).toMatch(/^\/media\/[a-f0-9-]{36}\.png$/);
+  });
+});

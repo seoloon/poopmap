@@ -1,5 +1,6 @@
-import { stat } from "node:fs/promises";
+import { stat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 
 /**
  * Directory for freshly uploaded photos. The weekly job (see
@@ -54,4 +55,29 @@ export async function resolveMediaFile(filename: string): Promise<{ path: string
     }
   }
   return null;
+}
+
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+const DATA_URL_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+=*)$/;
+
+/**
+ * Decodes a validated `data:image/...;base64,...` URL (already passed
+ * through `sanitizePhotos`) and writes it to the local buffer directory,
+ * returning the served path to store in `Photo.url` / `CompletionPhoto.url`.
+ */
+export async function saveUploadedPhoto(dataUrl: string): Promise<string> {
+  const match = DATA_URL_RE.exec(dataUrl);
+  if (!match) throw new Error("Invalid photo data-URL");
+  const [, mime, base64] = match;
+  const ext = MIME_TO_EXT[mime];
+  const filename = `${randomUUID()}.${ext}`;
+  const dir = localMediaDir();
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, filename), Buffer.from(base64, "base64"));
+  return `/media/${filename}`;
 }
