@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { payloadTooLarge, withApiErrorHandling } from "@/lib/api-error";
 import { sanitizePhotos } from "@/lib/photos";
 import { isRateLimited } from "@/lib/rate-limit";
+import { saveUploadedPhoto } from "@/lib/media";
 
 const MAX_PHOTOS = 3;
 const MAX_BODY_BYTES = 2_500_000;
@@ -70,7 +71,8 @@ export const POST = withApiErrorHandling(async (req: NextRequest, { params }: { 
     return NextResponse.json({ error: "Une complétion est déjà en attente de validation pour ce spot 🏃" }, { status: 409 });
   }
 
-  const urls = photosActionable ? sanitizePhotos(photos, MAX_PHOTOS) : [];
+  const photoDataUrls = photosActionable ? sanitizePhotos(photos, MAX_PHOTOS) : [];
+  const urls = await Promise.all(photoDataUrls.map(saveUploadedPhoto));
 
   const completion = await prisma.completion.create({
     data: {
