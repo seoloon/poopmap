@@ -118,7 +118,7 @@ export default function GameTetris({ difficulty, onFinish }: { difficulty: Diffi
           })
         )}
       </div>
-      {over && <p className="text-center text-sm font-bold text-ink/60">Game over — {score} pts 🧻</p>}
+      {over && <p className="text-center text-sm font-bold text-ink/60">Partie terminée — {score} pts 🧻</p>}
     </div>
   );
 }
