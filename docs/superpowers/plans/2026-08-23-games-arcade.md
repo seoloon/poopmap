@@ -1699,7 +1699,7 @@ describe("spawnPiece / isValidPosition", () => {
 
   it("is invalid when overlapping an already-locked cell", () => {
     const board = emptyBoard();
-    board[5][4] = "I";
+    board[5][5] = "I"; // the O piece at row:4,col:4 fills (5,5),(5,6),(6,5),(6,6) — this overlaps (5,5)
     const piece = { kind: "O" as const, shape: spawnPiece("O", COLS).shape, row: 4, col: 4 };
     expect(isValidPosition(board, piece)).toBe(false);
   });
@@ -1726,7 +1726,9 @@ describe("lockPiece", () => {
   });
 
   it("ignores cells above the board (negative row)", () => {
-    const piece = spawnPiece("O", COLS); // spawns with row: -1
+    // O's filled cells sit on template rows 1-2; spawning at row:-2 puts the first
+    // of those at absolute row -1 (clipped) and the second at row 0 (kept).
+    const piece = spawnPiece("O", COLS);
     const locked = lockPiece(emptyBoard(), piece);
     const filled = locked.flat().filter((c) => c !== null);
     expect(filled.length).toBeLessThan(4);
@@ -1844,8 +1846,10 @@ export function randomPieceKind(rng: () => number = Math.random): PieceKind {
   return PIECE_ORDER[Math.floor(rng() * PIECE_ORDER.length)];
 }
 
+/** row: -2 so a piece whose filled cells sit on template rows 1-2 (every shape here)
+ * emerges from above the board rather than appearing fully-formed at row 0. */
 export function spawnPiece(kind: PieceKind, cols: number): Piece {
-  return { kind, shape: SHAPES[kind], row: -1, col: Math.floor(cols / 2) - 2 };
+  return { kind, shape: SHAPES[kind], row: -2, col: Math.floor(cols / 2) - 2 };
 }
 
 function cellsOf(piece: Piece): { r: number; c: number }[] {
