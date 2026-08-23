@@ -26,6 +26,8 @@ const AuthModal = dynamic(() => import("@/components/AuthModal"), { ssr: false }
 const NotificationBell = dynamic(() => import("@/components/NotificationBell"), { ssr: false });
 const ProfilePage = dynamic(() => import("@/components/ProfilePage"), { ssr: false });
 const UserProfileModal = dynamic(() => import("@/components/UserProfileModal"), { ssr: false });
+const LeaderboardPage = dynamic(() => import("@/components/LeaderboardPage"), { ssr: false });
+const GamesPage = dynamic(() => import("@/components/GamesPage"), { ssr: false });
 
 const CACHE_KEY = "cacarte_cache_v1";
 
@@ -346,6 +348,8 @@ function Home() {
             }}
           />
         )}
+        {view === "leaderboard" && <LeaderboardPage me={me} onSelectUser={setViewedUserId} />}
+        {view === "games" && <GamesPage />}
       </AnimatePresence>
 
       <BottomNav

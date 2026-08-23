@@ -176,6 +176,16 @@ export type PublicProfileData = {
   activity: ProfileActivityToilet[];
 };
 
+/** One ranked row in `GET /api/leaderboard` — points = weighted sum of validated contributions. */
+export type LeaderboardEntry = {
+  userId: number;
+  pseudo: string;
+  points: number;
+  toiletsAdded: number;
+  completions: number;
+  reviews: number;
+};
+
 export type ReportCategory = "closed" | "not_existing" | "wrong_info" | "inappropriate" | "unsafe" | "other";
 
 /** Shared between the report modal (client) and the submit route (server-side validation). */
