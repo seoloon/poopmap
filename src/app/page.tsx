@@ -349,7 +349,7 @@ function Home() {
           />
         )}
         {view === "leaderboard" && <LeaderboardPage me={me} onSelectUser={setViewedUserId} />}
-        {view === "games" && <GamesPage />}
+        {view === "games" && <GamesPage me={me} />}
       </AnimatePresence>
 
       <BottomNav
