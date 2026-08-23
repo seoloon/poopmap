@@ -8,7 +8,6 @@ export default function GameSudoku({ difficulty, onFinish }: { difficulty: Diffi
     const solved = generateSolvedGrid();
     const puzzle = makePuzzle(solved, difficulty);
     return { puzzle, givenMask: puzzle.map((row) => row.map((v) => v !== 0)) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [difficulty]);
 
   const [grid, setGrid] = useState<SudokuGrid>(() => initial.puzzle.map((row) => [...row]));

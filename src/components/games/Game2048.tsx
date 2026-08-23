@@ -29,18 +29,18 @@ export default function Game2048({ onFinish }: { onFinish: (score: number) => vo
   const [over, setOver] = useState(false);
   const finishedRef = useRef(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const boardRef = useRef(board);
+  boardRef.current = board;
 
   const play = useCallback(
     (direction: Direction) => {
       if (over) return;
-      setBoard((current) => {
-        const result = move(current, direction);
-        if (!result.moved) return current;
-        const spawned = spawnTile(result.board);
-        setScore((s) => s + result.gained);
-        if (isGameOver(spawned)) setOver(true);
-        return spawned;
-      });
+      const result = move(boardRef.current, direction);
+      if (!result.moved) return;
+      const spawned = spawnTile(result.board);
+      setBoard(spawned);
+      setScore((s) => s + result.gained);
+      if (isGameOver(spawned)) setOver(true);
     },
     [over]
   );

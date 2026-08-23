@@ -11,6 +11,8 @@ import {
   type MinesweeperBoard,
 } from "@/lib/games/minesweeper";
 
+const LONG_PRESS_MS = 500;
+
 const NUMBER_COLORS: Record<number, string> = {
   1: "text-blue-700",
   2: "text-teal-dark",
@@ -34,6 +36,7 @@ export default function GameMinesweeper({
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef(Date.now());
   const finishedRef = useRef(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (status !== "playing") return;
@@ -62,6 +65,22 @@ export default function GameMinesweeper({
     setBoard(toggleFlag(board, r, c));
   };
 
+  const clearLongPress = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchStart = (r: number, c: number) => {
+    clearLongPress();
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      if (status !== "playing") return;
+      setBoard((current) => toggleFlag(current, r, c));
+    }, LONG_PRESS_MS);
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-center font-display text-lg font-extrabold">⏱️ {elapsed}s</p>
@@ -75,8 +94,12 @@ export default function GameMinesweeper({
               key={`${r}-${c}`}
               onClick={() => click(r, c)}
               onContextMenu={(e) => flag(e, r, c)}
+              onTouchStart={() => handleTouchStart(r, c)}
+              onTouchEnd={clearLongPress}
+              onTouchMove={clearLongPress}
               disabled={status !== "playing" && !cell.revealed}
-              className={`grid aspect-square place-items-center rounded text-xs font-extrabold ${
+              style={{ touchAction: "manipulation", WebkitUserSelect: "none", userSelect: "none" }}
+              className={`grid aspect-square select-none place-items-center rounded text-xs font-extrabold ${
                 cell.revealed ? (cell.mine ? "bg-red-200" : "bg-white/70") : "bg-sage hover:bg-sage-dark"
               } ${NUMBER_COLORS[cell.adjacent] ?? ""}`}
             >

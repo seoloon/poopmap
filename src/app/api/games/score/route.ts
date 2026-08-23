@@ -15,7 +15,7 @@ import {
 const NO_DIFFICULTY = "none";
 
 function parseGame(value: string | null): GameKind | null {
-  return value !== null && value in GAME_TO_DB ? (value as GameKind) : null;
+  return value !== null && Object.prototype.hasOwnProperty.call(GAME_TO_DB, value) ? (value as GameKind) : null;
 }
 
 export const GET = withApiErrorHandling(async (req: Request) => {

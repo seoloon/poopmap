@@ -67,17 +67,33 @@ export default function GameTetris({ difficulty, onFinish }: { difficulty: Diffi
     return () => clearInterval(id);
   }, [drop, over, difficulty, lines]);
 
+  const shiftHorizontal = useCallback(
+    (dir: -1 | 1) => {
+      if (over) return;
+      const moved = moveHorizontal(pieceRef.current, dir);
+      if (isValidPosition(boardRef.current, moved)) setPiece(moved);
+    },
+    [over]
+  );
+
+  const moveLeft = useCallback(() => shiftHorizontal(-1), [shiftHorizontal]);
+  const moveRight = useCallback(() => shiftHorizontal(1), [shiftHorizontal]);
+
+  const rotate = useCallback(() => {
+    if (over) return;
+    const rotated = rotatePiece(pieceRef.current);
+    if (isValidPosition(boardRef.current, rotated)) setPiece(rotated);
+  }, [over]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (over) return;
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
-        const moved = moveHorizontal(pieceRef.current, e.key === "ArrowLeft" ? -1 : 1);
-        if (isValidPosition(boardRef.current, moved)) setPiece(moved);
+        shiftHorizontal(e.key === "ArrowLeft" ? -1 : 1);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        const rotated = rotatePiece(pieceRef.current);
-        if (isValidPosition(boardRef.current, rotated)) setPiece(rotated);
+        rotate();
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         drop();
@@ -85,7 +101,7 @@ export default function GameTetris({ difficulty, onFinish }: { difficulty: Diffi
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [drop, over]);
+  }, [drop, over, shiftHorizontal, rotate]);
 
   useEffect(() => {
     if (over && !finishedRef.current) {
@@ -117,6 +133,44 @@ export default function GameTetris({ difficulty, onFinish }: { difficulty: Diffi
             return <div key={`${r}-${c}`} className={`aspect-square rounded-sm ${kind ? PIECE_COLORS[kind] : "bg-white/40"}`} />;
           })
         )}
+      </div>
+      <div className="mx-auto grid w-full max-w-xs grid-cols-4 gap-2">
+        <button
+          type="button"
+          onClick={moveLeft}
+          disabled={over}
+          aria-label="Déplacer à gauche"
+          className="sticker-sm sticker-press rounded-xl py-3 text-lg font-extrabold transition hover:bg-blush disabled:opacity-50"
+        >
+          ◀
+        </button>
+        <button
+          type="button"
+          onClick={moveRight}
+          disabled={over}
+          aria-label="Déplacer à droite"
+          className="sticker-sm sticker-press rounded-xl py-3 text-lg font-extrabold transition hover:bg-blush disabled:opacity-50"
+        >
+          ▶
+        </button>
+        <button
+          type="button"
+          onClick={rotate}
+          disabled={over}
+          aria-label="Tourner"
+          className="sticker-sm sticker-press rounded-xl py-3 text-lg font-extrabold transition hover:bg-blush disabled:opacity-50"
+        >
+          ↻
+        </button>
+        <button
+          type="button"
+          onClick={drop}
+          disabled={over}
+          aria-label="Descente rapide"
+          className="sticker-sm sticker-press rounded-xl py-3 text-lg font-extrabold transition hover:bg-blush disabled:opacity-50"
+        >
+          ▼
+        </button>
       </div>
       {over && <p className="text-center text-sm font-bold text-ink/60">Partie terminée — {score} pts 🧻</p>}
     </div>
