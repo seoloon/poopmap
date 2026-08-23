@@ -1,4 +1,4 @@
-/** Resizes + compresses to a JPEG data-URL (light DB, instant upload, no S3 needed). */
+/** Resizes + compresses to a WebP data-URL (light DB, instant upload, no S3 needed). */
 export async function compressImage(file: File, max = 900, quality = 0.72): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
@@ -9,5 +9,8 @@ export async function compressImage(file: File, max = 900, quality = 0.72): Prom
   if (!ctx) throw new Error("Canvas indisponible");
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
+  const webp = canvas.toDataURL("image/webp", quality);
+  // Browsers that lack WebP encoding silently return a PNG instead of throwing — fall back to JPEG.
+  if (webp.startsWith("data:image/webp")) return webp;
   return canvas.toDataURL("image/jpeg", quality);
 }
