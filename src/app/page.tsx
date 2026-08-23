@@ -222,6 +222,16 @@ function Home() {
     );
   };
 
+  // Auto-locate on arrival: prompt for location immediately, and if granted, center
+  // the map on the user right away — same effect as tapping the 📍 button, just
+  // without waiting for that tap. Denial/error still surfaces via geolocate's own toast.
+  useEffect(() => {
+    geolocate((pos) => {
+      setUserPos(pos);
+      setFlyTarget({ ...pos, zoom: 16, ts: Date.now() });
+    });
+  }, []);
+
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setMe(null);
@@ -265,9 +275,8 @@ function Home() {
       >
         <div className="flex items-center justify-between gap-2">
           <div className="sticker-sm pointer-events-auto flex items-center gap-2.5 rounded-2xl px-3.5 py-2">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-ink bg-signage text-lg leading-none shadow-[2px_2px_0_#1a1a1a]">
-              💩
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG, no benefit from next/image here */}
+            <img src="/cacarte-logo.svg" alt="Caca'rte" className="h-9 w-9 shrink-0" />
             <div className="leading-none">
               <p className="font-display text-xl font-extrabold tracking-tight">Caca&apos;rte</p>
               <p className="text-[10px] font-bold text-ink/60">la carte qui a du nez</p>

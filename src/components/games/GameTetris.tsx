@@ -13,10 +13,14 @@ import {
   spawnPiece,
   speedForLines,
   COLS,
+  ROWS,
   type Board,
   type Difficulty,
   type Piece,
 } from "@/lib/games/tetris";
+import GameOverModal from "./GameOverModal";
+
+const SWIPE_THRESHOLD_PX = 24;
 
 const PIECE_COLORS: Record<string, string> = {
   I: "bg-teal",
@@ -28,7 +32,17 @@ const PIECE_COLORS: Record<string, string> = {
   L: "bg-terracotta-dark",
 };
 
-export default function GameTetris({ difficulty, onFinish }: { difficulty: Difficulty; onFinish: (score: number) => void }) {
+export default function GameTetris({
+  difficulty,
+  onFinish,
+  onQuit,
+  onReplay,
+}: {
+  difficulty: Difficulty;
+  onFinish: (score: number) => void;
+  onQuit: () => void;
+  onReplay: () => void;
+}) {
   const [board, setBoard] = useState<Board>(() => emptyBoard());
   const [piece, setPiece] = useState<Piece>(() => spawnPiece(randomPieceKind(), COLS));
   const [score, setScore] = useState(0);
@@ -39,6 +53,7 @@ export default function GameTetris({ difficulty, onFinish }: { difficulty: Diffi
   const pieceRef = useRef(piece);
   boardRef.current = board;
   pieceRef.current = piece;
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   const drop = useCallback(() => {
     if (over) return;
@@ -123,8 +138,22 @@ export default function GameTetris({ difficulty, onFinish }: { difficulty: Diffi
         {score} pts · {lines} lignes
       </p>
       <div
-        className="mx-auto grid w-full max-w-xs gap-[1px] rounded-2xl bg-ink/10 p-1"
-        style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}
+        className="mx-auto grid max-h-[48vh] w-auto gap-[1px] rounded-2xl bg-ink/10 p-1"
+        style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)`, aspectRatio: `${COLS} / ${ROWS}` }}
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          touchStart.current = { x: t.clientX, y: t.clientY };
+        }}
+        onTouchEnd={(e) => {
+          if (!touchStart.current) return;
+          const t = e.changedTouches[0];
+          const dx = t.clientX - touchStart.current.x;
+          const dy = t.clientY - touchStart.current.y;
+          touchStart.current = null;
+          if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD_PX) return;
+          if (Math.abs(dx) > Math.abs(dy)) shiftHorizontal(dx > 0 ? 1 : -1);
+          else if (dy > 0) drop();
+        }}
       >
         {board.map((row, r) =>
           row.map((cell, c) => {
@@ -172,7 +201,16 @@ export default function GameTetris({ difficulty, onFinish }: { difficulty: Diffi
           ▼
         </button>
       </div>
-      {over && <p className="text-center text-sm font-bold text-ink/60">Partie terminée — {score} pts 🧻</p>}
+      {over && (
+        <GameOverModal
+          stats={[
+            { label: "Score", value: `${score} pts` },
+            { label: "Lignes", value: `${lines}` },
+          ]}
+          onReplay={onReplay}
+          onQuit={onQuit}
+        />
+      )}
     </div>
   );
 }

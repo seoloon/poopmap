@@ -21,18 +21,28 @@ const DOORS: { game: GameKind; emoji: string; title: string }[] = [
 ];
 
 function Game2048Screen({ me, onExit }: { me: SessionUser | null; onExit: () => void }) {
+  const [playKey, setPlayKey] = useState(0);
   return (
     <GameShell title="2048" emoji="🔢" game="2048" me={me} onExit={onExit}>
-      {({ finish }) => <Game2048 onFinish={finish} />}
+      {({ finish }) => (
+        <Game2048 key={playKey} onFinish={finish} onQuit={onExit} onReplay={() => setPlayKey((k) => k + 1)} />
+      )}
     </GameShell>
   );
 }
 
 function MinesweeperScreen({ me, onExit }: { me: SessionUser | null; onExit: () => void }) {
+  const [playKey, setPlayKey] = useState(0);
   return (
     <GameShell title="Démineur" emoji="💣" game="minesweeper" me={me} onExit={onExit}>
       {({ difficulty, finish }) => (
-        <GameMinesweeper difficulty={difficulty as MinesweeperDifficulty} onFinish={finish} />
+        <GameMinesweeper
+          key={playKey}
+          difficulty={difficulty as MinesweeperDifficulty}
+          onFinish={finish}
+          onQuit={onExit}
+          onReplay={() => setPlayKey((k) => k + 1)}
+        />
       )}
     </GameShell>
   );
@@ -47,9 +57,18 @@ function SudokuScreen({ me, onExit }: { me: SessionUser | null; onExit: () => vo
 }
 
 function TetrisScreen({ me, onExit }: { me: SessionUser | null; onExit: () => void }) {
+  const [playKey, setPlayKey] = useState(0);
   return (
     <GameShell title="Tetris" emoji="🧱" game="tetris" me={me} onExit={onExit}>
-      {({ difficulty, finish }) => <GameTetris difficulty={difficulty as TetrisDifficulty} onFinish={finish} />}
+      {({ difficulty, finish }) => (
+        <GameTetris
+          key={playKey}
+          difficulty={difficulty as TetrisDifficulty}
+          onFinish={finish}
+          onQuit={onExit}
+          onReplay={() => setPlayKey((k) => k + 1)}
+        />
+      )}
     </GameShell>
   );
 }

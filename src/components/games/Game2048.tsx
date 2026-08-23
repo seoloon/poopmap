@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createBoard, isGameOver, move, spawnTile, type Board2048, type Direction } from "@/lib/games/2048";
+import { AnimatePresence, motion } from "framer-motion";
+import { createBoard, isGameOver, move, spawnTile, type Direction, type Tile } from "@/lib/games/2048";
+import GameOverModal from "./GameOverModal";
 
 const TILE_COLORS: Record<number, string> = {
   2: "bg-blush text-ink",
@@ -23,24 +25,37 @@ const KEY_TO_DIRECTION: Record<string, Direction> = {
 
 const SWIPE_THRESHOLD_PX = 24;
 
-export default function Game2048({ onFinish }: { onFinish: (score: number) => void }) {
-  const [board, setBoard] = useState<Board2048>(() => createBoard());
+export default function Game2048({
+  onFinish,
+  onQuit,
+  onReplay,
+}: {
+  onFinish: (score: number) => void;
+  onQuit: () => void;
+  onReplay: () => void;
+}) {
+  const initial = useRef(createBoard());
+  const [tiles, setTiles] = useState<Tile[]>(() => initial.current.tiles);
+  const [mergedIds, setMergedIds] = useState<Set<number>>(new Set());
   const [score, setScore] = useState(0);
   const [over, setOver] = useState(false);
   const finishedRef = useRef(false);
+  const nextIdRef = useRef(initial.current.nextId);
+  const tilesRef = useRef(tiles);
+  tilesRef.current = tiles;
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const boardRef = useRef(board);
-  boardRef.current = board;
 
   const play = useCallback(
     (direction: Direction) => {
       if (over) return;
-      const result = move(boardRef.current, direction);
+      const result = move(tilesRef.current, direction);
       if (!result.moved) return;
-      const spawned = spawnTile(result.board);
-      setBoard(spawned);
+      const spawned = spawnTile(result.tiles, nextIdRef.current);
+      nextIdRef.current = spawned.nextId;
+      setTiles(spawned.tiles);
+      setMergedIds(new Set(result.mergedIds));
       setScore((s) => s + result.gained);
-      if (isGameOver(spawned)) setOver(true);
+      if (isGameOver(spawned.tiles)) setOver(true);
     },
     [over]
   );
@@ -68,7 +83,7 @@ export default function Game2048({ onFinish }: { onFinish: (score: number) => vo
     <div className="space-y-3">
       <p className="text-center font-display text-2xl font-extrabold">{score} pts</p>
       <div
-        className="mx-auto grid aspect-square w-full max-w-xs grid-cols-4 gap-2 rounded-2xl bg-ink/10 p-2"
+        className="relative mx-auto aspect-square w-full max-w-xs rounded-2xl bg-ink/10 p-2"
         onTouchStart={(e) => {
           const t = e.touches[0];
           touchStart.current = { x: t.clientX, y: t.clientY };
@@ -84,18 +99,36 @@ export default function Game2048({ onFinish }: { onFinish: (score: number) => vo
           else play(dy > 0 ? "down" : "up");
         }}
       >
-        {board.flat().map((value, i) => (
-          <div
-            key={i}
-            className={`grid place-items-center rounded-xl font-display text-lg font-extrabold ${
-              value === 0 ? "bg-white/40" : (TILE_COLORS[value] ?? "bg-ink text-white")
-            }`}
-          >
-            {value !== 0 && value}
-          </div>
-        ))}
+        {/* Empty-cell background grid — static, never animated. */}
+        <div className="grid h-full w-full grid-cols-4 grid-rows-4 gap-2">
+          {Array.from({ length: 16 }).map((_, i) => (
+            <div key={i} className="rounded-xl bg-white/40" />
+          ))}
+        </div>
+
+        {/* Tiles, absolutely overlaid on the same grid — each keyed by its stable id so
+            framer-motion's layout animation slides it from its old cell to its new one. */}
+        <div className="absolute inset-2 grid grid-cols-4 grid-rows-4 gap-2">
+          <AnimatePresence>
+            {tiles.map((t) => (
+              <motion.div
+                key={t.id}
+                layout
+                initial={{ scale: 0 }}
+                animate={{ scale: mergedIds.has(t.id) ? [1, 1.2, 1] : 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                style={{ gridRowStart: t.row + 1, gridColumnStart: t.col + 1 }}
+                className={`grid place-items-center rounded-xl font-display text-lg font-extrabold ${TILE_COLORS[t.value] ?? "bg-ink text-white"}`}
+              >
+                {t.value}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
       </div>
-      {over && <p className="text-center text-sm font-bold text-ink/60">Partie terminée 🧻</p>}
+
+      {over && <GameOverModal stats={[{ label: "Score", value: `${score} pts` }]} onReplay={onReplay} onQuit={onQuit} />}
     </div>
   );
 }

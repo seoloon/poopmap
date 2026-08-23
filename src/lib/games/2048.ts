@@ -1,82 +1,109 @@
-export type Board2048 = number[][];
+export type Tile = { id: number; value: number; row: number; col: number };
 export type Direction = "left" | "right" | "up" | "down";
 
 const SIZE = 4;
 
-export function emptyBoard(): Board2048 {
-  return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+function emptyCells(tiles: Tile[]): [number, number][] {
+  const occupied = new Set(tiles.map((t) => `${t.row},${t.col}`));
+  const cells: [number, number][] = [];
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (!occupied.has(`${r},${c}`)) cells.push([r, c]);
+  return cells;
 }
 
-/** Fills one random empty cell with 2 (90%) or 4 (10%). No-op if the board is full. */
-export function spawnTile(board: Board2048, rng: () => number = Math.random): Board2048 {
-  const empties: [number, number][] = [];
-  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (board[r][c] === 0) empties.push([r, c]);
-  const next = board.map((row) => [...row]);
-  if (empties.length === 0) return next;
-  const [r, c] = empties[Math.floor(rng() * empties.length)];
-  next[r][c] = rng() < 0.9 ? 2 : 4;
-  return next;
+/** Adds one new tile (value 2 90%, 4 10%) in a random empty cell, tagged with `nextId`.
+ * No-op (same array reference, same nextId) if the board is already full. */
+export function spawnTile(tiles: Tile[], nextId: number, rng: () => number = Math.random): { tiles: Tile[]; nextId: number } {
+  const cells = emptyCells(tiles);
+  if (cells.length === 0) return { tiles, nextId };
+  const [row, col] = cells[Math.floor(rng() * cells.length)];
+  const value = rng() < 0.9 ? 2 : 4;
+  return { tiles: [...tiles, { id: nextId, value, row, col }], nextId: nextId + 1 };
 }
 
-export function createBoard(rng: () => number = Math.random): Board2048 {
-  return spawnTile(spawnTile(emptyBoard(), rng), rng);
+export function createBoard(rng: () => number = Math.random): { tiles: Tile[]; nextId: number } {
+  const first = spawnTile([], 1, rng);
+  return spawnTile(first.tiles, first.nextId, rng);
 }
 
-/** Slides a line of 4 values toward index 0, merging equal adjacent values once each. */
-function slideAndMergeLine(line: number[]): { line: number[]; gained: number } {
-  const values = line.filter((v) => v !== 0);
-  const merged: number[] = [];
+type LineCell = { id: number; value: number };
+
+/** Slides one line's cells toward index 0, merging equal adjacent values once each.
+ * The surviving id of a merge is always the one closer to index 0 (the direction the line slides toward). */
+function mergeLine(cells: LineCell[]): { cells: LineCell[]; gained: number; mergedIds: number[] } {
+  const result: LineCell[] = [];
   let gained = 0;
-  for (let i = 0; i < values.length; i++) {
-    if (i < values.length - 1 && values[i] === values[i + 1]) {
-      const value = values[i] * 2;
-      merged.push(value);
+  const mergedIds: number[] = [];
+  for (let i = 0; i < cells.length; i++) {
+    if (i < cells.length - 1 && cells[i].value === cells[i + 1].value) {
+      const value = cells[i].value * 2;
+      result.push({ id: cells[i].id, value });
       gained += value;
+      mergedIds.push(cells[i].id);
       i++;
     } else {
-      merged.push(values[i]);
+      result.push(cells[i]);
     }
   }
-  while (merged.length < line.length) merged.push(0);
-  return { line: merged, gained };
+  return { cells: result, gained, mergedIds };
 }
 
-/** Applies one move. Every direction is implemented as "slide toward index 0",
- * reversing the row/column first for "right"/"down" and reversing the result back. */
-export function move(board: Board2048, direction: Direction): { board: Board2048; moved: boolean; gained: number } {
-  const next = emptyBoard();
+function sameLayout(a: Tile[], b: Tile[]): boolean {
+  if (a.length !== b.length) return false;
+  const key = (t: Tile) => `${t.id}:${t.row}:${t.col}:${t.value}`;
+  const setA = new Set(a.map(key));
+  return b.every((t) => setA.has(key(t)));
+}
+
+/** Applies one move. Every direction slides each row/column toward the edge in that
+ * direction, merging equal adjacent tiles once each and keeping stable tile ids so the
+ * caller can animate a tile's position change instead of re-rendering the whole board. */
+export function move(
+  tiles: Tile[],
+  direction: Direction
+): { tiles: Tile[]; moved: boolean; gained: number; mergedIds: number[] } {
+  const horizontal = direction === "left" || direction === "right";
+  const reversed = direction === "right" || direction === "down";
   let gained = 0;
+  const mergedIds: number[] = [];
+  const nextTiles: Tile[] = [];
 
-  if (direction === "left" || direction === "right") {
-    for (let r = 0; r < SIZE; r++) {
-      const reversed = direction === "right";
-      const source = reversed ? [...board[r]].reverse() : board[r];
-      const { line, gained: g } = slideAndMergeLine(source);
-      gained += g;
-      next[r] = reversed ? line.reverse() : line;
-    }
-  } else {
-    for (let c = 0; c < SIZE; c++) {
-      const column = board.map((row) => row[c]);
-      const reversed = direction === "down";
-      const source = reversed ? column.reverse() : column;
-      const { line, gained: g } = slideAndMergeLine(source);
-      gained += g;
-      const result = reversed ? line.reverse() : line;
-      for (let r = 0; r < SIZE; r++) next[r][c] = result[r];
-    }
+  for (let lineIndex = 0; lineIndex < SIZE; lineIndex++) {
+    const lineTiles: LineCell[] = tiles
+      .filter((t) => (horizontal ? t.row === lineIndex : t.col === lineIndex))
+      .sort((a, b) => {
+        const posA = horizontal ? a.col : a.row;
+        const posB = horizontal ? b.col : b.row;
+        return reversed ? posB - posA : posA - posB;
+      })
+      .map((t) => ({ id: t.id, value: t.value }));
+
+    const { cells, gained: g, mergedIds: m } = mergeLine(lineTiles);
+    gained += g;
+    mergedIds.push(...m);
+
+    cells.forEach((cell, i) => {
+      const pos = reversed ? SIZE - 1 - i : i;
+      nextTiles.push({
+        id: cell.id,
+        value: cell.value,
+        row: horizontal ? lineIndex : pos,
+        col: horizontal ? pos : lineIndex,
+      });
+    });
   }
 
-  const moved = JSON.stringify(next) !== JSON.stringify(board);
-  return { board: next, moved, gained };
+  return { tiles: nextTiles, moved: !sameLayout(tiles, nextTiles), gained, mergedIds };
 }
 
-export function isGameOver(board: Board2048): boolean {
+export function isGameOver(tiles: Tile[]): boolean {
+  if (tiles.length < SIZE * SIZE) return false;
+  const grid = new Map<string, number>();
+  for (const t of tiles) grid.set(`${t.row},${t.col}`, t.value);
   for (let r = 0; r < SIZE; r++) {
     for (let c = 0; c < SIZE; c++) {
-      if (board[r][c] === 0) return false;
-      if (c < SIZE - 1 && board[r][c] === board[r][c + 1]) return false;
-      if (r < SIZE - 1 && board[r][c] === board[r + 1][c]) return false;
+      const v = grid.get(`${r},${c}`);
+      if (c < SIZE - 1 && v === grid.get(`${r},${c + 1}`)) return false;
+      if (r < SIZE - 1 && v === grid.get(`${r + 1},${c}`)) return false;
     }
   }
   return true;

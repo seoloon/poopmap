@@ -10,6 +10,7 @@ import {
   type Difficulty,
   type MinesweeperBoard,
 } from "@/lib/games/minesweeper";
+import GameOverModal from "./GameOverModal";
 
 const LONG_PRESS_MS = 500;
 
@@ -27,9 +28,13 @@ const NUMBER_COLORS: Record<number, string> = {
 export default function GameMinesweeper({
   difficulty,
   onFinish,
+  onQuit,
+  onReplay,
 }: {
   difficulty: Difficulty;
   onFinish: (seconds: number) => void;
+  onQuit: () => void;
+  onReplay: () => void;
 }) {
   const [board, setBoard] = useState<MinesweeperBoard>(() => createBoard(difficulty));
   const [status, setStatus] = useState<"playing" | "won" | "lost">("playing");
@@ -72,6 +77,10 @@ export default function GameMinesweeper({
     }
   };
 
+  // Guards against a long-press timer firing setBoard after the component has
+  // unmounted (e.g. navigating away mid-press).
+  useEffect(() => clearLongPress, []);
+
   const handleTouchStart = (r: number, c: number) => {
     clearLongPress();
     longPressTimer.current = setTimeout(() => {
@@ -108,7 +117,7 @@ export default function GameMinesweeper({
           ))
         )}
       </div>
-      {status === "lost" && <p className="text-center text-sm font-bold text-red-700">💥 Boom — retente ta chance</p>}
+      {status === "lost" && <GameOverModal stats={[{ label: "Temps", value: `${elapsed}s` }]} onReplay={onReplay} onQuit={onQuit} />}
       {status === "won" && <p className="text-center text-sm font-bold text-teal">🎉 Gagné en {elapsed}s !</p>}
     </div>
   );

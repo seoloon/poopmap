@@ -55,8 +55,12 @@ export default function GameSudoku({ difficulty, onFinish }: { difficulty: Diffi
                 value={value === 0 ? "" : value}
                 disabled={given || done}
                 onChange={(e) => setCell(r, c, e.target.value.replace(/[^1-9]/g, ""))}
-                className={`grid aspect-square place-items-center text-center text-sm font-extrabold ${
-                  given ? "bg-ink/10" : invalid ? "bg-red-100 text-red-700" : "bg-white"
+                // Safari/iOS renders disabled inputs with its own washed-out gray text via
+                // -webkit-text-fill-color, ignoring any color the classes below set — this
+                // override is what actually makes the given digits visible on iPhone.
+                style={{ WebkitTextFillColor: "#1a1a1a", opacity: 1 }}
+                className={`aspect-square text-center text-sm font-extrabold ${
+                  given ? "bg-ink/10 text-ink" : invalid ? "bg-red-100 text-red-700" : "bg-white text-ink"
                 }`}
               />
             );
