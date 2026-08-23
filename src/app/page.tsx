@@ -274,6 +274,21 @@ function Home() {
       swipeStart.current = null;
     }
   };
+  // Reserve the same edge strip for swipe-nav before Leaflet ever sees the touch: a
+  // capture-phase listener runs before the map's own bubble-phase drag handler, so
+  // stopping propagation here keeps a finger starting at the edge from panning the
+  // map underneath the gesture. Kept blocked for touchmove too, for the rest of that
+  // same gesture, so lifting off the edge mid-swipe doesn't hand the drag to the map.
+  const onTouchStartCapture = (e: React.TouchEvent) => {
+    if (gamePlaying) return;
+    const t = e.touches[0];
+    if (t.clientX <= SWIPE_EDGE_PX || t.clientX >= window.innerWidth - SWIPE_EDGE_PX) {
+      e.stopPropagation();
+    }
+  };
+  const onTouchMoveCapture = (e: React.TouchEvent) => {
+    if (!gamePlaying && swipeStart.current) e.stopPropagation();
+  };
   const onTouchEnd = (e: React.TouchEvent) => {
     const start = swipeStart.current;
     swipeStart.current = null;
@@ -293,6 +308,8 @@ function Home() {
     <div
       className="relative h-dvh w-full overflow-hidden bg-cream"
       onTouchStart={onTouchStart}
+      onTouchStartCapture={onTouchStartCapture}
+      onTouchMoveCapture={onTouchMoveCapture}
       onTouchEnd={onTouchEnd}
     >
       <div className="absolute inset-0 z-0">
