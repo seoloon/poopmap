@@ -42,11 +42,14 @@ export default function GameSudoku({ difficulty, onFinish }: { difficulty: Diffi
   return (
     <div className="space-y-3">
       <p className="text-center font-display text-lg font-extrabold">⏱️ {elapsed}s</p>
-      <div className="mx-auto grid w-full max-w-sm grid-cols-9 gap-[1px] rounded-2xl bg-ink p-[1px]">
+      <div className="mx-auto grid w-full max-w-sm grid-cols-9 gap-[1px] overflow-hidden rounded-2xl bg-ink p-[1px]">
         {grid.map((row, r) =>
           row.map((value, c) => {
             const given = initial.givenMask[r][c];
             const invalid = value !== 0 && !isValidPlacement(grid, r, c, value);
+            // Thicker border after every 3rd row/column so the nine 3x3 boxes read
+            // clearly against the grid's uniform 1px cell lines.
+            const boxBorder = `${c % 3 === 2 && c !== 8 ? "border-r-2" : ""} ${r % 3 === 2 && r !== 8 ? "border-b-2" : ""}`;
             return (
               <input
                 key={`${r}-${c}`}
@@ -68,7 +71,7 @@ export default function GameSudoku({ difficulty, onFinish }: { difficulty: Diffi
                 // hiding the digit — reproducible even outside React with a plain
                 // <input style="background: rgba(26,26,26,.1)">. Opaque colors never
                 // triggered it in testing, hence baking in the equivalent solid tone.
-                className={`aspect-square appearance-none text-center text-sm font-extrabold ${
+                className={`aspect-square appearance-none border-ink text-center text-sm font-extrabold ${boxBorder} ${
                   given ? "bg-[#e8e6df] text-ink" : invalid ? "bg-red-100 text-red-700" : "bg-white text-ink"
                 }`}
               />
