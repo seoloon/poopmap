@@ -85,6 +85,13 @@ enum NotificationStatus {
   PARTIAL
 }
 
+enum GameKind {
+  TWENTY48
+  MINESWEEPER
+  SUDOKU
+  TETRIS
+}
+
 model User {
   id            Int      @id @default(autoincrement())
   /// Private login identifier (distinct from the public `pseudo`), stored trimmed + lowercased.
@@ -108,6 +115,7 @@ model User {
   notifications       Notification[]
   reports             Report[]       @relation("ReportedBy")
   reportsResolved     Report[]       @relation("ReportResolvedBy")
+  gameScores          GameScore[]
 
   @@map("users")
 }
@@ -300,4 +308,21 @@ model Meta {
   value Int    @default(0)
 
   @@map("meta")
+}
+
+/// One row per (user, game, difficulty) holding their personal best — upserted,
+/// never a history log. `difficulty` is always a real string, never null: Postgres
+/// doesn't enforce uniqueness across NULLs, so 2048 (which has no difficulty)
+/// stores the sentinel "none" instead of null to keep `@@unique` meaningful.
+model GameScore {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game       GameKind
+  difficulty String
+  bestScore  Int      @map("best_score")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, game, difficulty])
+  @@map("game_scores")
 }
