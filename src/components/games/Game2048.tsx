@@ -82,8 +82,15 @@ export default function Game2048({
   return (
     <div className="space-y-3">
       <p className="text-center font-display text-2xl font-extrabold">{score} pts</p>
+      {/*
+        Empty-cell backgrounds and tiles share this ONE grid (rather than two
+        independently-positioned grids stacked via absolute inset) so there's a single
+        column/row track computation for both layers. Two separate grids with matching
+        classes still drifted apart on iOS Safari, which rounds fractional gap/track
+        math differently across independently-laid-out grids — Chrome didn't show it.
+      */}
       <div
-        className="relative mx-auto aspect-square w-full max-w-xs rounded-2xl bg-ink/10 p-2"
+        className="relative mx-auto grid aspect-square w-full max-w-xs grid-cols-4 grid-rows-4 gap-2 rounded-2xl bg-ink/10 p-2"
         onTouchStart={(e) => {
           const t = e.touches[0];
           touchStart.current = { x: t.clientX, y: t.clientY };
@@ -99,33 +106,30 @@ export default function Game2048({
           else play(dy > 0 ? "down" : "up");
         }}
       >
-        {/* Empty-cell background grid — static, never animated. */}
-        <div className="grid h-full w-full grid-cols-4 grid-rows-4 gap-2">
-          {Array.from({ length: 16 }).map((_, i) => (
-            <div key={i} className="rounded-xl bg-white/40" />
-          ))}
-        </div>
+        {/* Empty-cell backgrounds — static, never animated, one per grid cell. */}
+        {Array.from({ length: 16 }).map((_, i) => (
+          <div key={i} className="rounded-xl bg-white/40" style={{ gridRowStart: Math.floor(i / 4) + 1, gridColumnStart: (i % 4) + 1 }} />
+        ))}
 
-        {/* Tiles, absolutely overlaid on the same grid — each keyed by its stable id so
-            framer-motion's layout animation slides it from its old cell to its new one. */}
-        <div className="absolute inset-2 grid grid-cols-4 grid-rows-4 gap-2">
-          <AnimatePresence>
-            {tiles.map((t) => (
-              <motion.div
-                key={t.id}
-                layout
-                initial={{ scale: 0 }}
-                animate={{ scale: mergedIds.has(t.id) ? [1, 1.2, 1] : 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                style={{ gridRowStart: t.row + 1, gridColumnStart: t.col + 1 }}
-                className={`grid place-items-center rounded-xl font-display text-lg font-extrabold ${TILE_COLORS[t.value] ?? "bg-ink text-white"}`}
-              >
-                {t.value}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+        {/* Tiles, placed in the same grid cells as the backgrounds above (and painted
+            on top of them by DOM order) — each keyed by its stable id so framer-motion's
+            layout animation slides it from its old cell to its new one. */}
+        <AnimatePresence>
+          {tiles.map((t) => (
+            <motion.div
+              key={t.id}
+              layout
+              initial={{ scale: 0 }}
+              animate={{ scale: mergedIds.has(t.id) ? [1, 1.2, 1] : 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 32 }}
+              style={{ gridRowStart: t.row + 1, gridColumnStart: t.col + 1 }}
+              className={`grid place-items-center rounded-xl font-display text-lg font-extrabold ${TILE_COLORS[t.value] ?? "bg-ink text-white"}`}
+            >
+              {t.value}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
       {over && <GameOverModal stats={[{ label: "Score", value: `${score} pts` }]} onReplay={onReplay} onQuit={onQuit} />}

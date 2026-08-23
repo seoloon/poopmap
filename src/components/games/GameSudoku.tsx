@@ -53,14 +53,23 @@ export default function GameSudoku({ difficulty, onFinish }: { difficulty: Diffi
                 inputMode="numeric"
                 maxLength={1}
                 value={value === 0 ? "" : value}
-                disabled={given || done}
+                // Given cells use readOnly rather than disabled: iOS Safari renders
+                // disabled inputs with its own washed-out gray text via a `:disabled`
+                // UA-stylesheet rule that inline styles can't override (no !important
+                // support in React's style object), so the digits stayed invisible on
+                // iPhone no matter what color was set. readOnly blocks edits the same
+                // way without ever triggering that native disabled appearance.
+                readOnly={given}
+                disabled={!given && done}
                 onChange={(e) => setCell(r, c, e.target.value.replace(/[^1-9]/g, ""))}
-                // Safari/iOS renders disabled inputs with its own washed-out gray text via
-                // -webkit-text-fill-color, ignoring any color the classes below set — this
-                // override is what actually makes the given digits visible on iPhone.
-                style={{ WebkitTextFillColor: "#1a1a1a", opacity: 1 }}
-                className={`aspect-square text-center text-sm font-extrabold ${
-                  given ? "bg-ink/10 text-ink" : invalid ? "bg-red-100 text-red-700" : "bg-white text-ink"
+                // An opaque color, not bg-ink/10: a translucent background on an
+                // <input> hits a real GPU-paint bug on some devices where the alpha
+                // channel is dropped and the color renders fully opaque (black),
+                // hiding the digit — reproducible even outside React with a plain
+                // <input style="background: rgba(26,26,26,.1)">. Opaque colors never
+                // triggered it in testing, hence baking in the equivalent solid tone.
+                className={`aspect-square appearance-none text-center text-sm font-extrabold ${
+                  given ? "bg-[#e8e6df] text-ink" : invalid ? "bg-red-100 text-red-700" : "bg-white text-ink"
                 }`}
               />
             );

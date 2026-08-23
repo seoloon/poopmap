@@ -23,6 +23,17 @@ body {
   height: 100%;
 }
 
+/* This app is light-only — no dark: variants anywhere. Without an explicit
+   color-scheme, browsers auto-darken native form-control chrome (input
+   backgrounds, etc.) when the OS prefers dark, even though the rest of the
+   page stays light — e.g. Sudoku's given-cell inputs, which only paint a
+   translucent tint expecting a light background underneath, rendered as
+   solid black on any browser in dark mode. Declaring light here keeps every
+   native control's default chrome light regardless of OS/browser theme. */
+:root {
+  color-scheme: light;
+}
+
 body {
   font-family: var(--font-body);
   background: var(--color-cream);
