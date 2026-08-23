@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { SessionUser } from "@/lib/types";
 import type { GameKind } from "@/lib/games/scoring";
@@ -74,8 +74,27 @@ function TetrisScreen({ me, onExit }: { me: SessionUser | null; onExit: () => vo
 }
 
 /** The "Jeux" tab: a toilet-arcade lobby — a row of stall doors, each opening its game. */
-export default function GamesPage({ me }: { me: SessionUser | null }) {
+export default function GamesPage({
+  me,
+  onPlayingChange,
+}: {
+  me: SessionUser | null;
+  onPlayingChange?: (playing: boolean) => void;
+}) {
   const [open, setOpen] = useState<GameKind | null>(null);
+
+  const setOpenGame = (game: GameKind | null) => {
+    setOpen(game);
+    onPlayingChange?.(game !== null);
+  };
+
+  // Navigating away from the Jeux tab mid-game unmounts this component without ever
+  // calling setOpenGame(null) — reset the parent's "playing" flag so swipe nav doesn't
+  // stay disabled forever.
+  useEffect(() => {
+    return () => onPlayingChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <motion.div
@@ -94,7 +113,7 @@ export default function GamesPage({ me }: { me: SessionUser | null }) {
               {DOORS.map((d) => (
                 <button
                   key={d.game}
-                  onClick={() => setOpen(d.game)}
+                  onClick={() => setOpenGame(d.game)}
                   className="sticker sticker-press group relative flex flex-col items-center gap-2 rounded-[24px] border-4 border-ink bg-white p-5 pt-8 transition hover:-translate-y-1"
                 >
                   <span className="absolute -top-3 rounded-full border-2 border-ink bg-teal px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white shadow-[2px_2px_0_#1a1a1a]">
@@ -110,10 +129,10 @@ export default function GamesPage({ me }: { me: SessionUser | null }) {
           </motion.div>
         ) : (
           <motion.div key={open} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            {open === "2048" && <Game2048Screen me={me} onExit={() => setOpen(null)} />}
-            {open === "minesweeper" && <MinesweeperScreen me={me} onExit={() => setOpen(null)} />}
-            {open === "sudoku" && <SudokuScreen me={me} onExit={() => setOpen(null)} />}
-            {open === "tetris" && <TetrisScreen me={me} onExit={() => setOpen(null)} />}
+            {open === "2048" && <Game2048Screen me={me} onExit={() => setOpenGame(null)} />}
+            {open === "minesweeper" && <MinesweeperScreen me={me} onExit={() => setOpenGame(null)} />}
+            {open === "sudoku" && <SudokuScreen me={me} onExit={() => setOpenGame(null)} />}
+            {open === "tetris" && <TetrisScreen me={me} onExit={() => setOpenGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

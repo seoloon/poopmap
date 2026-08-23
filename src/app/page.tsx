@@ -31,6 +31,14 @@ const GamesPage = dynamic(() => import("@/components/GamesPage"), { ssr: false }
 
 const CACHE_KEY = "cacarte_cache_v1";
 
+// Bottom nav's left-to-right visual order (the "+" add button sits between "profile"
+// and "leaderboard" but isn't a tab, so it's skipped here).
+const TAB_ORDER: NavTab[] = ["map", "profile", "leaderboard", "games"];
+// Only a touch starting within this many px of a screen edge arms the gesture — keeps
+// swipes over the map (panning) and over scrollable lists from triggering nav changes.
+const SWIPE_EDGE_PX = 24;
+const SWIPE_MIN_DX = 60;
+
 function Splash() {
   return (
     <div className="grid h-full w-full place-items-center bg-cream">
@@ -65,7 +73,9 @@ function Home() {
   const [flyTarget, setFlyTarget] = useState<FlyTarget>(null);
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   const [view, setView] = useState<NavTab>("map");
+  const [gamePlaying, setGamePlaying] = useState(false);
   const versionRef = useRef(-1);
+  const swipeStart = useRef<{ x: number; y: number; edge: "left" | "right" } | null>(null);
 
   /** Cheap sync: sends the last known version, server replies 304 if nothing changed. */
   const sync = useCallback(async (force = false) => {
@@ -250,8 +260,41 @@ function Home() {
     setShowAdd(true);
   }, []);
 
+  // Edge-swipe tab navigation: a horizontal drag starting near the left/right screen
+  // edge moves to the adjacent tab in that direction. Disabled mid-game since 2048 and
+  // Tetris already use swipes on their own board.
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (gamePlaying) return;
+    const t = e.touches[0];
+    if (t.clientX <= SWIPE_EDGE_PX) {
+      swipeStart.current = { x: t.clientX, y: t.clientY, edge: "left" };
+    } else if (t.clientX >= window.innerWidth - SWIPE_EDGE_PX) {
+      swipeStart.current = { x: t.clientX, y: t.clientY, edge: "right" };
+    } else {
+      swipeStart.current = null;
+    }
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || gamePlaying) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_DX || Math.abs(dx) <= Math.abs(dy)) return;
+    if (dx > 0 && start.edge !== "left") return;
+    if (dx < 0 && start.edge !== "right") return;
+    const idx = TAB_ORDER.indexOf(view);
+    const nextIdx = dx > 0 ? idx + 1 : idx - 1;
+    if (nextIdx >= 0 && nextIdx < TAB_ORDER.length) setView(TAB_ORDER[nextIdx]);
+  };
+
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-cream">
+    <div
+      className="relative h-dvh w-full overflow-hidden bg-cream"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <div className="absolute inset-0 z-0">
         <CacarteMap
           toilets={visible}
@@ -358,7 +401,7 @@ function Home() {
           />
         )}
         {view === "leaderboard" && <LeaderboardPage me={me} onSelectUser={setViewedUserId} />}
-        {view === "games" && <GamesPage me={me} />}
+        {view === "games" && <GamesPage me={me} onPlayingChange={setGamePlaying} />}
       </AnimatePresence>
 
       <BottomNav
