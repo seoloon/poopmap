@@ -129,11 +129,30 @@ const CARTO_STYLE_URL = "https://basemaps.cartocdn.com/gl/positron-gl-style/styl
  * name fields, so we can just ask for the French one instead — same look, correct language.
  * Falls back to plain OSM France raster tiles if the style can't be fetched (offline, CDN down).
  */
+/**
+ * Vector (WebGL2) basemap only on capable devices. Old phones (iPhone 6s: 2 cores, weak GPU)
+ * choke on maplibre + a 2MB style, so they get the light raster tiles instead.
+ * shortcut: core-count heuristic, tune if a weak device slips through or a good one is demoted.
+ */
+function canUseVectorMap(): boolean {
+  try {
+    if ((navigator.hardwareConcurrency || 4) <= 2) return false;
+    if (((navigator as { deviceMemory?: number }).deviceMemory ?? 4) <= 2) return false;
+    return !!document.createElement("canvas").getContext("webgl2");
+  } catch {
+    return false;
+  }
+}
+
 function useFrenchPositronStyle() {
   const [style, setStyle] = useState<object | "error" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    if (!canUseVectorMap()) {
+      setStyle("error");
+      return;
+    }
     fetch(CARTO_STYLE_URL)
       .then((res) => {
         if (!res.ok) throw new Error(`CARTO style HTTP ${res.status}`);
