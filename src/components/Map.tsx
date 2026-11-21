@@ -7,7 +7,6 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "maplibre-gl/dist/maplibre-gl.css";
-import "@maplibre/maplibre-gl-leaflet";
 import { FRANCE_BOUNDS, FRANCE_CENTER } from "@/lib/france";
 import type { ToiletPin } from "@/lib/types";
 
@@ -181,10 +180,21 @@ function Basemap() {
 
   useEffect(() => {
     if (!style || style === "error") return;
-    const layer = L.maplibreGL({ style: style as never, attributionControl: false });
-    layer.addTo(map);
+    let cancelled = false;
+    let layer: { remove: () => unknown } | undefined;
+    // Import dynamique : les appareils faibles (style === "error") ne téléchargent jamais maplibre.
+    void Promise.all([import("maplibre-gl"), import("@maplibre/maplibre-gl-leaflet")])
+      .then(([maplibre]) => {
+        if (cancelled) return;
+        maplibre.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+        const l = L.maplibreGL({ style: style as never, attributionControl: false });
+        l.addTo(map);
+        layer = l;
+      })
+      .catch((err) => console.warn("[map] maplibre indisponible:", err));
     return () => {
-      layer.remove();
+      cancelled = true;
+      layer?.remove();
     };
   }, [map, style]);
 
