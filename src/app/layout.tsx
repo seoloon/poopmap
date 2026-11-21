@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   title: "Caca'rte 💩 — Trouve le trône le plus proche",
   description:
     "La carte collaborative des toilettes publiques en France : trouve, référence et note les petits coins près de toi.",
+  appleWebApp: { capable: true, title: "Caca'rte", statusBarStyle: "default" },
   icons: {
     icon: "/cacarte-logo.svg",
   },
